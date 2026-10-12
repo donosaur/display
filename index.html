@@ -72,6 +72,15 @@
     pointer-events: none;
   }
   #status-note.show { display: flex; }
+  .debug-badge {
+    position: absolute; bottom: 12px; left: 12px; z-index: 5;
+    background: rgba(0, 0, 0, 0.78); color: #f4f4f5;
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px;
+    padding: 6px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 1.4vh; line-height: 1.4; white-space: pre-line;
+    pointer-events: none;
+  }
   video#vkeep { position: fixed; width: 2px; height: 2px; opacity: 0.01; bottom: 0; left: 0; pointer-events: none; }
 </style>
 </head>
@@ -90,10 +99,41 @@
 (function () {
   "use strict";
 
-  /* ================= CONFIG ================= */
-  var SLIDE_MS = 15000;   // time per photo
-  var PAIR_HOLD = 1.5;    // multiplier for paired slides
-  var SHUFFLE = true;     // randomize order on load
+  /* ================= CONFIG & URL PARAMS ================= */
+  var urlParams = new URLSearchParams(window.location.search);
+
+  // interval: seconds, default 15
+  var SLIDE_MS = 15000;
+  var intervalParam = parseFloat(urlParams.get('interval'));
+  if (!isNaN(intervalParam) && intervalParam > 0) {
+    SLIDE_MS = Math.round(intervalParam * 1000);
+  }
+
+  // pairhold: multiplier for paired slides, default 1.5
+  var PAIR_HOLD = 1.5;
+  var pairholdParam = parseFloat(urlParams.get('pairhold'));
+  if (!isNaN(pairholdParam) && pairholdParam > 0) {
+    PAIR_HOLD = pairholdParam;
+  }
+
+  // shuffle: 0/1, default 1 (true)
+  var SHUFFLE = true;
+  var shuffleParam = urlParams.get('shuffle');
+  if (shuffleParam === '0') {
+    SHUFFLE = false;
+  } else if (shuffleParam === '1') {
+    SHUFFLE = true;
+  }
+
+  // layout: auto/single, default auto
+  var LAYOUT = 'auto';
+  var layoutParam = urlParams.get('layout');
+  if (layoutParam === 'single') {
+    LAYOUT = 'single';
+  }
+
+  // debug: 1 overlays each image filename, dimensions, and computed loss
+  var DEBUG = urlParams.get('debug') === '1';
 
   /* ================= slideshow ================= */
   var slides = [
@@ -159,6 +199,7 @@
   }
 
   function isPairable(img, va) {
+    if (LAYOUT === 'single') return false;
     if (!img || !img.w || !img.h) return false;
     var ia = img.w / img.h;
     var caFull = va;
@@ -166,6 +207,25 @@
     var lossFull = cropLoss(ia, caFull);
     var lossHalf = cropLoss(ia, caHalf);
     return (lossFull - lossHalf) >= 0.15;
+  }
+
+  function createDebugBadge(photo, va) {
+    if (!DEBUG || !photo) return null;
+    var badge = document.createElement('div');
+    badge.className = 'debug-badge';
+    var text = photo.f || photo.src || '';
+    if (photo.w && photo.h) {
+      var ia = photo.w / photo.h;
+      var caFull = va;
+      var caHalf = (va < 1) ? (2 * va) : (va / 2);
+      var lossFull = cropLoss(ia, caFull);
+      var lossHalf = cropLoss(ia, caHalf);
+      var diff = lossFull - lossHalf;
+      text += ' (' + photo.w + '×' + photo.h + ')\n';
+      text += 'loss full: ' + lossFull.toFixed(3) + ' | half: ' + lossHalf.toFixed(3) + ' (Δ ' + diff.toFixed(3) + ')';
+    }
+    badge.textContent = text;
+    return badge;
   }
 
   function buildSlideQueue(list, va) {
@@ -209,6 +269,10 @@
       var cell = document.createElement('div');
       cell.className = 'cell cover';
       cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      if (DEBUG) {
+        var b = createDebugBadge(slide.photos[0], va);
+        if (b) cell.appendChild(b);
+      }
       slideEl.appendChild(cell);
     } else if (slide.type === 'pair') {
       var container = document.createElement('div');
@@ -217,6 +281,10 @@
         var cell = document.createElement('div');
         cell.className = 'cell cover';
         cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[i]) + '")';
+        if (DEBUG) {
+          var b = createDebugBadge(slide.photos[i], va);
+          if (b) cell.appendChild(b);
+        }
         container.appendChild(cell);
       }
       slideEl.appendChild(container);
@@ -231,6 +299,10 @@
       fg.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
       container.appendChild(bg);
       container.appendChild(fg);
+      if (DEBUG) {
+        var b = createDebugBadge(slide.photos[0], va);
+        if (b) container.appendChild(b);
+      }
       slideEl.appendChild(container);
     }
   }
@@ -465,7 +537,6 @@
 
   /* ---------- 2) audio keepalive (keeps Silk from timing out) ---------- */
   var audio = document.getElementById('akeep');
-  var urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('audio') === 'unmuted') {
     audio.muted = false;
     audio.volume = 0.01;
