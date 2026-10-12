@@ -69,26 +69,27 @@
     }
     return a;
   }
-  function preload(src) { var im = new Image(); im.src = src; }
+  function photoSrc(p) { return typeof p === 'string' ? p : (p && p.src ? p.src : ''); }
+  function preload(src) { if (!src) return; var im = new Image(); im.src = src; }
   function show(i) {
     var back = 1 - front;
-    slides[back].style.backgroundImage = 'url("' + photos[i] + '")';
+    slides[back].style.backgroundImage = 'url("' + photoSrc(photos[i]) + '")';
     // force reflow so the fade retriggers even for repeat URLs
     void slides[back].offsetWidth;
     slides[back].classList.add('visible');
     slides[front].classList.remove('visible');
     front = back;
-    preload(photos[(i + 1) % photos.length]);
-    preload(photos[(i + 2) % photos.length]);
+    preload(photoSrc(photos[(i + 1) % photos.length]));
+    preload(photoSrc(photos[(i + 2) % photos.length]));
   }
   function next() { idx = (idx + 1) % photos.length; show(idx); }
   function start() {
     if (!photos.length) return;
     if (SHUFFLE) shuffle(photos);
     // show first immediately on the front layer
-    slides[front].style.backgroundImage = 'url("' + photos[0] + '")';
+    slides[front].style.backgroundImage = 'url("' + photoSrc(photos[0]) + '")';
     slides[front].classList.add('visible');
-    preload(photos[1 % photos.length]);
+    preload(photoSrc(photos[1 % photos.length]));
     setInterval(next, SLIDE_MS);
   }
   // tap advances to next photo (after the initial arming tap)
@@ -100,7 +101,12 @@
 
   // photo list: try photos.json first, fall back to inline list
   function initPhotos(list) {
-    photos = list.slice();
+    photos = list.map(function (item) {
+      if (typeof item === 'string') {
+        return { f: item, src: item, w: 0, h: 0 };
+      }
+      return { f: item.f, w: item.w, h: item.h, src: 'photos/' + item.f };
+    });
     start();
   }
   try {
@@ -108,7 +114,7 @@
       if (!r.ok) throw 0;
       return r.json();
     }).then(function (list) {
-      initPhotos(list.map(function (f) { return 'photos/' + f; }));
+      initPhotos(list);
     }).catch(function () { initPhotos(INLINE_PHOTOS); });
   } catch (e) { initPhotos(INLINE_PHOTOS); }
 
