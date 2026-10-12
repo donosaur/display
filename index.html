@@ -323,12 +323,7 @@
     window.visualViewport.addEventListener('resize', onResize);
   }
 
-  // tap advances to next photo (after the initial arming tap)
   var armed = false;
-  document.addEventListener('click', function () {
-    if (!armed) return; // first tap is for arming keep-awake/fullscreen
-    next();
-  });
 
   // photo list: try photos.json first, fall back to inline list
   function initPhotos(list) {
@@ -421,6 +416,7 @@
   document.addEventListener('fullscreenchange', renderFsBtn);
   document.addEventListener('webkitfullscreenchange', renderFsBtn);
   fsBtn.addEventListener('click', function (e) { e.stopPropagation(); goFullscreen(); });
+  fsBtn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
   renderFsBtn();
 
   /* ---------- visibility: re-arm everything ---------- */
@@ -428,7 +424,7 @@
     if (document.visibilityState === 'visible') { requestLock(); keepAudio(); goFullscreen(); }
   });
 
-  /* ---------- tap-to-start ---------- */
+  /* ---------- gesture handling (arms on first, advances on later) ---------- */
   var tapEl = document.getElementById('tapstart');
   function showTapStart() { tapEl.classList.add('show'); }
   function hideTapStart() { tapEl.classList.remove('show'); }
@@ -436,14 +432,16 @@
     hideTapStart(); requestLock(); keepAudio(); goFullscreen();
     armed = true;
   }
-  tapEl.addEventListener('click', function (e) { e.stopPropagation(); arm(); });
-  function firstGesture() {
-    document.removeEventListener('click', firstGesture);
-    document.removeEventListener('touchstart', firstGesture);
-    arm();
-  }
-  document.addEventListener('click', firstGesture);
-  document.addEventListener('touchstart', firstGesture);
+  document.addEventListener('pointerup', function (e) {
+    if (e.target && (e.target.id === 'fsbtn' || (e.target.closest && e.target.closest('#fsbtn')))) {
+      return;
+    }
+    if (!armed) {
+      arm();
+      return;
+    }
+    next();
+  });
 
   /* ---------- go ---------- */
   requestLock();
