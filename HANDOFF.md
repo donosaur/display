@@ -1,7 +1,21 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat: sync all 372 photos from Google Photos album (antigravity, 2026-10-12 18:49 EDT)
-- Completed: Standalone Echo Show 15 display kiosk repository initialized; synced all 372 photos from Google Photos "Display" album, manifest, and fallback.
+- Last save (MBP M3): docs: update README and handoff for responsive kiosk architecture (antigravity, 2026-10-12 19:20 EDT)
+- Completed:
+  - Added dimensions to `photos.json` manifest via `scripts/sync-photos.py`, content-hashed all 372 photos (first 10 hex characters of SHA1), parsed EXIF orientations, and reported 86 images under 1080px longest edge.
+  - Configured caching headers in `netlify.toml` with `no-cache` for HTML and manifest, and immutable long cache for `/photos/*.jpg`.
+  - Implemented responsive orientation pairing layout with crop loss calculation, stacking top/bottom in portrait (va < 1) and side-by-side in landscape (va >= 1) with 3px dividers, and blurred backdrop fallback for leftover pairable photos.
+  - Debounced dynamic queue reflow on resize and orientationchange while keeping current photo in view.
+  - Image pre-decoding via `img.decode()` with error recovery that drops broken photos without fading to black.
+  - Consolidated gesture handling to a single `pointerup` handler so first touch arms without advancing.
+  - Replaced interval with setTimeout chain restarted on advance, with paired slides holding 1.5× longer.
+  - Eliminated wake lock churn and deleted legacy clock/badge code.
+  - Removed 372-entry inline fallback list and added retry with backoff and status note.
+  - Added queue reshuffling on wrap preventing repeat of last slide, and scheduled nightly reload at 4:00 AM.
+  - Added `?audio=unmuted` testing mode and full URL-param configuration (`interval`, `pairhold`, `shuffle`, `layout`, `debug`).
+  - Rewrote documentation in `README.md`.
 - In flight: none.
 - Inbound: none.
-- Next: Connect Netlify and custom domain.
+- Next:
+  - Test on real Echo Show 15 to verify idle timeout behavior (default muted vs `?audio=unmuted`) and record confirmed mode in README.
+  - Optionally swap in higher-resolution originals for the 86 flagged low-res images in `photos/`.
