@@ -20,8 +20,11 @@ browser, deployed at `polisti.co/display`.
 ## Stay-awake stack (Silk returns to the home screen after ~10-15 min idle)
 
 1. Screen Wake Lock API, re-requested every 60s and on visibility change.
-2. Muted looping 1s silence (base64 WAV in the page) — the keep-silk-open
+2. Looping 1s silent audio (base64 WAV in the page) — the keep-silk-open
    trick; Silk treats active media as engagement and skips its timeout.
+   Default is muted. Append `?audio=unmuted` to test with `muted` removed
+   and `volume = 0.01` if muted media fails to prevent timeout on Echo Show.
+   - Mode confirmed: [Unconfirmed — test on Echo Show: default muted vs ?audio=unmuted]
 3. Fallback: 2px canvas captureStream in a hidden looping muted video.
 4. "Tap anywhere to start" overlay if autoplay is blocked pre-gesture.
 

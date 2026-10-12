@@ -463,8 +463,13 @@
   }
   setInterval(requestLock, 60000);
 
-  /* ---------- 2) muted audio keepalive (keeps Silk from timing out) ---------- */
+  /* ---------- 2) audio keepalive (keeps Silk from timing out) ---------- */
   var audio = document.getElementById('akeep');
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('audio') === 'unmuted') {
+    audio.muted = false;
+    audio.volume = 0.01;
+  }
   function keepAudio() {
     try {
       var p = audio.play();
