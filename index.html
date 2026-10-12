@@ -611,7 +611,21 @@
   keepAudio();
   goFullscreen();
   setTimeout(keepAudio, 1500);
-  setTimeout(function(){ if (audio.paused) showTapStart(); }, 4000);
+  /* ---------- expose kiosk state for diagnostics and testing ---------- */
+  window.__kiosk = {
+    getPhotos: function() { return photos; },
+    getQueue: function() { return slideQueue; },
+    getSlideIdx: function() { return slideIdx; },
+    isArmed: function() { return armed; },
+    getFront: function() { return front; },
+    getSlides: function() { return slides; },
+    getSlideTimer: function() { return slideTimer; },
+    getViewportSize: getViewportSize,
+    buildSlideQueue: buildSlideQueue,
+    renderSlide: renderSlide,
+    show: show,
+    next: next
+  };
 })();
 </script>
 </body>

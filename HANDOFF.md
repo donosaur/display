@@ -1,6 +1,6 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): docs: update README and handoff for responsive kiosk architecture (antigravity, 2026-10-12 19:20 EDT)
+- Last save (MBP M3): feat: prune 51 removed photos from album and manifest (antigravity, 2026-10-12 19:41 EDT)
 - Completed:
   - Added dimensions to `photos.json` manifest via `scripts/sync-photos.py`, content-hashed all 372 photos (first 10 hex characters of SHA1), parsed EXIF orientations, and reported 86 images under 1080px longest edge.
   - Configured caching headers in `netlify.toml` with `no-cache` for HTML and manifest, and immutable long cache for `/photos/*.jpg`.
@@ -13,6 +13,7 @@
   - Removed 372-entry inline fallback list and added retry with backoff and status note.
   - Added queue reshuffling on wrap preventing repeat of last slide, and scheduled nightly reload at 4:00 AM.
   - Added `?audio=unmuted` testing mode and full URL-param configuration (`interval`, `pairhold`, `shuffle`, `layout`, `debug`).
+  - Pruned 51 photos removed from the Google Photos album, updated `photos.json` manifest down to 321 photos.
   - Rewrote documentation in `README.md`.
 - In flight: none.
 - Inbound: none.
