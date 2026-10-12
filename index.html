@@ -103,7 +103,40 @@
     return a;
   }
   function photoSrc(p) { return typeof p === 'string' ? p : (p && p.src ? p.src : ''); }
-  function preload(src) { if (!src) return; var im = new Image(); im.src = src; }
+
+  function loadImage(src) {
+    return new Promise(function (resolve, reject) {
+      if (!src) { reject(new Error('Empty src')); return; }
+      var img = new Image();
+      img.src = src;
+      if (typeof img.decode === 'function') {
+        img.decode().then(function () {
+          resolve(img);
+        }).catch(function () {
+          img.onload = function () { resolve(img); };
+          img.onerror = function () { reject(new Error('Image failed to load: ' + src)); };
+          if (img.complete) {
+            if (img.naturalWidth > 0) resolve(img);
+            else reject(new Error('Image failed to load: ' + src));
+          }
+        });
+      } else {
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error('Image failed to load: ' + src)); };
+        if (img.complete) {
+          if (img.naturalWidth > 0) resolve(img);
+          else reject(new Error('Image failed to load: ' + src));
+        }
+      }
+    });
+  }
+
+  function preloadSlide(slide) {
+    if (!slide || !slide.photos) return;
+    for (var i = 0; i < slide.photos.length; i++) {
+      loadImage(photoSrc(slide.photos[i])).catch(function () {});
+    }
+  }
 
   function getViewportSize() {
     var vv = window.visualViewport;
@@ -195,24 +228,50 @@
     }
   }
 
-  function show(i) {
+  var showSeq = 0;
+  function show(targetIdx) {
     if (!slideQueue.length) return;
-    slideIdx = i % slideQueue.length;
-    var currentSlide = slideQueue[slideIdx];
-    var back = 1 - front;
-    var vp = getViewportSize();
-    renderSlide(slides[back], currentSlide, vp.va);
-    void slides[back].offsetWidth;
-    slides[back].classList.add('visible');
-    slides[front].classList.remove('visible');
-    front = back;
+    var curIdx = ((targetIdx % slideQueue.length) + slideQueue.length) % slideQueue.length;
+    var targetSlide = slideQueue[curIdx];
+    var seq = ++showSeq;
 
-    var nextSlide = slideQueue[(slideIdx + 1) % slideQueue.length];
-    if (nextSlide) {
-      for (var p = 0; p < nextSlide.photos.length; p++) {
-        preload(photoSrc(nextSlide.photos[p]));
+    var loadPromises = targetSlide.photos.map(function (p) {
+      return loadImage(photoSrc(p)).then(function () {
+        return { photo: p, ok: true };
+      }).catch(function (err) {
+        return { photo: p, ok: false, err: err };
+      });
+    });
+
+    Promise.all(loadPromises).then(function (results) {
+      if (seq !== showSeq) return;
+
+      var failed = results.filter(function (r) { return !r.ok; });
+      if (failed.length > 0) {
+        var badPhotos = failed.map(function (r) { return r.photo; });
+        photos = photos.filter(function (p) {
+          return !badPhotos.some(function (b) { return (b.f && b.f === p.f) || b.src === p.src; });
+        });
+        var vp = getViewportSize();
+        slideQueue = buildSlideQueue(photos, vp.va);
+        if (!slideQueue.length) return;
+        show(curIdx);
+        return;
       }
-    }
+
+      slideIdx = curIdx;
+      var back = 1 - front;
+      var vp = getViewportSize();
+      renderSlide(slides[back], targetSlide, vp.va);
+      void slides[back].offsetWidth;
+      slides[back].classList.add('visible');
+      slides[front].classList.remove('visible');
+      front = back;
+
+      // Preload next slide images in the background
+      var nextSlide = slideQueue[(slideIdx + 1) % slideQueue.length];
+      preloadSlide(nextSlide);
+    });
   }
 
   function next() {
@@ -226,14 +285,7 @@
     var vp = getViewportSize();
     slideQueue = buildSlideQueue(photos, vp.va);
     slideIdx = 0;
-    renderSlide(slides[front], slideQueue[0], vp.va);
-    slides[front].classList.add('visible');
-    var nextSlide = slideQueue[1 % slideQueue.length];
-    if (nextSlide) {
-      for (var p = 0; p < nextSlide.photos.length; p++) {
-        preload(photoSrc(nextSlide.photos[p]));
-      }
-    }
+    show(0);
     setInterval(next, SLIDE_MS);
   }
 
