@@ -6,7 +6,7 @@ browser, deployed at `polisti.co/display`.
 ## Files
 
 - `index.html` — the whole page (slideshow + keep-awake stack + fullscreen)
-- `photos/` — the 29 slideshow images + `photos.json` manifest
+- `photos/` — the 372 slideshow images + `photos.json` manifest
 - `README.md` — this file
 
 ## What it does
@@ -37,10 +37,7 @@ engaged. Degrades gracefully if Silk refuses fullscreen.
 
 1. Add/remove images in the Google Photos "Display" album
    (https://photos.app.goo.gl/aApkvGk8CEChkoCF7).
-2. Download full-size copies into `photos/` as `photo-NN.jpg`.
+2. Download full-size copies into `photos/` as `photo-NNN.jpg`.
 3. Regenerate `photos/photos.json` (a JSON array of filenames), or edit it
    by hand. The page also carries an inline fallback list.
 4. Redeploy `index.html` + `photos/`.
-
-One album photo (#10) had a broken share token on 2026-10-12 and was skipped;
-re-share it in the album if you want it included.
