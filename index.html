@@ -13,11 +13,44 @@
   }
   .slide {
     position: fixed; inset: 0;
-    background-color: #000; background-position: center; background-repeat: no-repeat;
-    background-size: cover;
+    background-color: #000;
     opacity: 0; transition: opacity 1.8s ease-in-out;
+    overflow: hidden;
   }
   .slide.visible { opacity: 1; }
+  .cell {
+    width: 100%; height: 100%;
+    background-position: center; background-repeat: no-repeat;
+    position: relative;
+  }
+  .cell.cover {
+    background-size: cover;
+  }
+  .pair-container {
+    display: flex; width: 100%; height: 100%; background: #000;
+  }
+  .pair-container.portrait-split {
+    flex-direction: column; gap: 3px;
+  }
+  .pair-container.landscape-split {
+    flex-direction: row; gap: 3px;
+  }
+  .pair-container .cell {
+    flex: 1 1 0; min-width: 0; min-height: 0;
+  }
+  .leftover-container {
+    position: relative; width: 100%; height: 100%; background: #000; overflow: hidden;
+  }
+  .leftover-container .backdrop {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+    filter: blur(40px) brightness(0.5);
+    transform: scale(1.2);
+  }
+  .leftover-container .foreground {
+    position: absolute; inset: 0;
+    background-size: contain; background-position: center; background-repeat: no-repeat;
+  }
   #fsbtn {
     position: fixed; bottom: 1.5vh; left: 2vw; z-index: 5;
     font-size: 1.6vh; color: rgba(255,255,255,0.5); background: rgba(20,20,22,0.7);
@@ -60,7 +93,7 @@
     document.getElementById('slide-a'),
     document.getElementById('slide-b')
   ];
-  var photos = [], idx = 0, front = 0;
+  var photos = [], slideQueue = [], slideIdx = 0, front = 0;
 
   function shuffle(a) {
     for (var i = a.length - 1; i > 0; i--) {
@@ -71,27 +104,173 @@
   }
   function photoSrc(p) { return typeof p === 'string' ? p : (p && p.src ? p.src : ''); }
   function preload(src) { if (!src) return; var im = new Image(); im.src = src; }
+
+  function getViewportSize() {
+    var vv = window.visualViewport;
+    var w = vv ? vv.width : window.innerWidth;
+    var h = vv ? vv.height : window.innerHeight;
+    return { w: w, h: h, va: w / h };
+  }
+
+  function cropLoss(ia, ca) {
+    var minA = Math.min(ia, ca);
+    var maxA = Math.max(ia, ca);
+    return 1 - (minA / maxA);
+  }
+
+  function isPairable(img, va) {
+    if (!img || !img.w || !img.h) return false;
+    var ia = img.w / img.h;
+    var caFull = va;
+    var caHalf = (va < 1) ? (2 * va) : (va / 2);
+    var lossFull = cropLoss(ia, caFull);
+    var lossHalf = cropLoss(ia, caHalf);
+    return (lossFull - lossHalf) >= 0.15;
+  }
+
+  function buildSlideQueue(list, va) {
+    var queue = [];
+    var isPair = [];
+    for (var i = 0; i < list.length; i++) {
+      isPair.push(isPairable(list[i], va));
+    }
+    var used = new Array(list.length).fill(false);
+    for (var i = 0; i < list.length; i++) {
+      if (used[i]) continue;
+      var p1 = list[i];
+      if (!isPair[i]) {
+        queue.push({ type: 'single', photos: [p1] });
+        used[i] = true;
+      } else {
+        var nextIdx = -1;
+        for (var j = i + 1; j < list.length; j++) {
+          if (!used[j] && isPair[j]) {
+            nextIdx = j;
+            break;
+          }
+        }
+        if (nextIdx !== -1) {
+          queue.push({ type: 'pair', photos: [p1, list[nextIdx]] });
+          used[i] = true;
+          used[nextIdx] = true;
+        } else {
+          queue.push({ type: 'leftover', photos: [p1] });
+          used[i] = true;
+        }
+      }
+    }
+    return queue;
+  }
+
+  function renderSlide(slideEl, slide, va) {
+    slideEl.innerHTML = '';
+    if (!slide || !slide.photos.length) return;
+    if (slide.type === 'single') {
+      var cell = document.createElement('div');
+      cell.className = 'cell cover';
+      cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      slideEl.appendChild(cell);
+    } else if (slide.type === 'pair') {
+      var container = document.createElement('div');
+      container.className = 'pair-container ' + (va < 1 ? 'portrait-split' : 'landscape-split');
+      for (var i = 0; i < slide.photos.length; i++) {
+        var cell = document.createElement('div');
+        cell.className = 'cell cover';
+        cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[i]) + '")';
+        container.appendChild(cell);
+      }
+      slideEl.appendChild(container);
+    } else if (slide.type === 'leftover') {
+      var container = document.createElement('div');
+      container.className = 'leftover-container';
+      var bg = document.createElement('div');
+      bg.className = 'backdrop';
+      bg.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      var fg = document.createElement('div');
+      fg.className = 'foreground';
+      fg.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      container.appendChild(bg);
+      container.appendChild(fg);
+      slideEl.appendChild(container);
+    }
+  }
+
   function show(i) {
+    if (!slideQueue.length) return;
+    slideIdx = i % slideQueue.length;
+    var currentSlide = slideQueue[slideIdx];
     var back = 1 - front;
-    slides[back].style.backgroundImage = 'url("' + photoSrc(photos[i]) + '")';
-    // force reflow so the fade retriggers even for repeat URLs
+    var vp = getViewportSize();
+    renderSlide(slides[back], currentSlide, vp.va);
     void slides[back].offsetWidth;
     slides[back].classList.add('visible');
     slides[front].classList.remove('visible');
     front = back;
-    preload(photoSrc(photos[(i + 1) % photos.length]));
-    preload(photoSrc(photos[(i + 2) % photos.length]));
+
+    var nextSlide = slideQueue[(slideIdx + 1) % slideQueue.length];
+    if (nextSlide) {
+      for (var p = 0; p < nextSlide.photos.length; p++) {
+        preload(photoSrc(nextSlide.photos[p]));
+      }
+    }
   }
-  function next() { idx = (idx + 1) % photos.length; show(idx); }
+
+  function next() {
+    if (!slideQueue.length) return;
+    show(slideIdx + 1);
+  }
+
   function start() {
     if (!photos.length) return;
     if (SHUFFLE) shuffle(photos);
-    // show first immediately on the front layer
-    slides[front].style.backgroundImage = 'url("' + photoSrc(photos[0]) + '")';
+    var vp = getViewportSize();
+    slideQueue = buildSlideQueue(photos, vp.va);
+    slideIdx = 0;
+    renderSlide(slides[front], slideQueue[0], vp.va);
     slides[front].classList.add('visible');
-    preload(photoSrc(photos[1 % photos.length]));
+    var nextSlide = slideQueue[1 % slideQueue.length];
+    if (nextSlide) {
+      for (var p = 0; p < nextSlide.photos.length; p++) {
+        preload(photoSrc(nextSlide.photos[p]));
+      }
+    }
     setInterval(next, SLIDE_MS);
   }
+
+  var resizeTimer = null;
+  function handleResize() {
+    if (!photos.length || !slideQueue.length) return;
+    var currentPhoto = null;
+    if (slideQueue[slideIdx] && slideQueue[slideIdx].photos.length) {
+      currentPhoto = slideQueue[slideIdx].photos[0];
+    }
+    var vp = getViewportSize();
+    slideQueue = buildSlideQueue(photos, vp.va);
+    var newIdx = 0;
+    if (currentPhoto) {
+      for (var i = 0; i < slideQueue.length; i++) {
+        for (var j = 0; j < slideQueue[i].photos.length; j++) {
+          if (slideQueue[i].photos[j].f === currentPhoto.f || slideQueue[i].photos[j].src === currentPhoto.src) {
+            newIdx = i;
+            break;
+          }
+        }
+        if (newIdx === i) break;
+      }
+    }
+    slideIdx = newIdx;
+    renderSlide(slides[front], slideQueue[slideIdx], vp.va);
+  }
+  function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(handleResize, 300);
+  }
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onResize);
+  }
+
   // tap advances to next photo (after the initial arming tap)
   var armed = false;
   document.addEventListener('click', function () {
