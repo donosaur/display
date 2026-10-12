@@ -14,25 +14,10 @@
   .slide {
     position: fixed; inset: 0;
     background-color: #000; background-position: center; background-repeat: no-repeat;
-    background-size: contain;
+    background-size: cover;
     opacity: 0; transition: opacity 1.8s ease-in-out;
   }
   .slide.visible { opacity: 1; }
-  /* subtle clock overlay */
-  #clock-overlay {
-    position: fixed; bottom: 2.5vh; left: 50%; transform: translateX(-50%);
-    color: rgba(255,255,255,0.55); font-size: 2.4vh; font-weight: 300;
-    letter-spacing: 0.15em; font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 1.5vh rgba(0,0,0,0.9); z-index: 3; pointer-events: none;
-    white-space: nowrap;
-  }
-  #stay-awake {
-    position: fixed; bottom: 1.5vh; right: 2vw; z-index: 4;
-    display: flex; align-items: center; gap: 0.8vh;
-    font-size: 1.6vh; color: rgba(255,255,255,0.25);
-  }
-  #stay-awake .dot { width: 1.2vh; height: 1.2vh; border-radius: 50%; background: #52525b; }
-  #stay-awake.on .dot { background: #4ade80; box-shadow: 0 0 1.2vh #4ade80; }
   #fsbtn {
     position: fixed; bottom: 1.5vh; left: 2vw; z-index: 5;
     font-size: 1.6vh; color: rgba(255,255,255,0.5); background: rgba(20,20,22,0.7);
@@ -53,8 +38,6 @@
 <body>
 <div id="slide-a" class="slide"></div>
 <div id="slide-b" class="slide"></div>
-<div id="clock-overlay"></div>
-<div id="stay-awake"><span class="dot"></span><span id="stay-awake-text"></span></div>
 <button id="fsbtn" type="button">&#x26F6; fullscreen</button>
 <div id="tapstart">tap anywhere to start</div>
 
@@ -69,7 +52,7 @@
   /* ================= CONFIG ================= */
   var SLIDE_MS = 15000;   // time per photo
   var SHUFFLE = true;     // randomize order on load
-  var SHOW_CLOCK = true;  // small clock overlay
+  var SHOW_CLOCK = false;  // clock overlay disabled
   var INLINE_PHOTOS = ["photos/photo-01.jpg", "photos/photo-02.jpg", "photos/photo-03.jpg", "photos/photo-04.jpg", "photos/photo-05.jpg", "photos/photo-06.jpg", "photos/photo-07.jpg", "photos/photo-08.jpg", "photos/photo-09.jpg", "photos/photo-11.jpg", "photos/photo-12.jpg", "photos/photo-13.jpg", "photos/photo-14.jpg", "photos/photo-15.jpg", "photos/photo-16.jpg", "photos/photo-17.jpg", "photos/photo-18.jpg", "photos/photo-19.jpg", "photos/photo-20.jpg", "photos/photo-21.jpg", "photos/photo-22.jpg", "photos/photo-23.jpg", "photos/photo-24.jpg", "photos/photo-25.jpg", "photos/photo-26.jpg", "photos/photo-27.jpg", "photos/photo-28.jpg", "photos/photo-29.jpg", "photos/photo-30.jpg"]; // fallback if photos.json missing
 
   /* ================= slideshow ================= */
@@ -131,25 +114,17 @@
 
   /* ---------- clock overlay ---------- */
   var clockEl = document.getElementById('clock-overlay');
-  if (SHOW_CLOCK) {
-    (function tick() {
-      var d = new Date();
-      var h = d.getHours(), m = d.getMinutes();
-      clockEl.textContent =
-        d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) +
-        '  ' + (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
-      setTimeout(tick, 10000);
-    })();
-  } else { clockEl.style.display = 'none'; }
+  if (clockEl) { clockEl.style.display = 'none'; }
 
   /* ---------- stay-awake status ---------- */
   var badge = document.getElementById('stay-awake');
   var badgeText = document.getElementById('stay-awake-text');
   var lockCount = 0;
   function renderBadge() {
+    if (!badge) return;
     var on = lockCount > 0;
     badge.classList.toggle('on', on);
-    badgeText.textContent = on ? 'stay-awake' : '';
+    if (badgeText) badgeText.textContent = on ? 'stay-awake' : '';
   }
 
   /* ---------- 1) Screen Wake Lock API ---------- */
