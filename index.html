@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="9ecdf59154">
+<meta name="build" content="3d337645f3">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -314,7 +314,7 @@
     }
   }
 
-  function createDebugBadge(photo, va, pairScore) {
+  function createDebugBadge(photo, va, pairScore, pairType) {
     if (!DEBUG || !photo) return null;
     var badge = document.createElement('div');
     badge.className = 'debug-badge';
@@ -333,7 +333,8 @@
       }
     }
     if (pairScore !== undefined && pairScore !== null) {
-      lines.push('pair score: ' + Number(pairScore).toFixed(3));
+      var typeStr = pairType ? (' (' + pairType + ')') : '';
+      lines.push('pair score: ' + Number(pairScore).toFixed(3) + typeStr);
     }
     if (photo.date) {
       lines.push('date: ' + photo.date);
@@ -498,7 +499,7 @@
         if (p2) {
           used[p1.f] = true;
           used[p2.f] = true;
-          pairedSlides.push({ type: 'pair', photos: [p1, p2], score: chosen[1] });
+          pairedSlides.push({ type: 'pair', pairType: 'partner', photos: [p1, p2], score: chosen[1] });
         }
       }
     }
@@ -535,16 +536,44 @@
       if (bestPartner && bestScore > 0) {
         used[p1.f] = true;
         used[bestPartner.f] = true;
-        pairedSlides.push({ type: 'pair', photos: [p1, bestPartner], score: bestScore });
+        pairedSlides.push({ type: 'pair', pairType: 'partner', photos: [p1, bestPartner], score: bestScore });
       }
     }
 
-    // Pass 3: Fall back to any remaining unused pairable photos
+    // Pass 2b: Pick from alt color partners (top 3, weighted) before sequential fallback
+    var altRemaining = pairable.filter(function (p) { return !used[p.f]; });
+    for (var i = 0; i < altRemaining.length; i++) {
+      var p1 = altRemaining[i];
+      if (used[p1.f]) continue;
+
+      var validAlts = [];
+      var alts = p1.alt || [];
+      for (var k = 0; k < alts.length; k++) {
+        var candFn = alts[k][0];
+        var candScore = alts[k][1];
+        if (!used[candFn] && !roundFailedPhotos[candFn] && isPairMap[candFn] && candFn !== p1.f && candScore > 0) {
+          validAlts.push(alts[k]);
+          if (validAlts.length >= 3) break;
+        }
+      }
+
+      if (validAlts.length > 0) {
+        var chosenAlt = pickWeightedPartner(validAlts);
+        var p2 = photoMap[chosenAlt[0]];
+        if (p2) {
+          used[p1.f] = true;
+          used[p2.f] = true;
+          pairedSlides.push({ type: 'pair', pairType: 'alt', photos: [p1, p2], score: chosenAlt[1] });
+        }
+      }
+    }
+
+    // Pass 3: Fall back to any remaining unused pairable photos sequentially
     var remaining = pairable.filter(function (p) { return !used[p.f]; });
     for (var i = 0; i + 1 < remaining.length; i += 2) {
       used[remaining[i].f] = true;
       used[remaining[i + 1].f] = true;
-      pairedSlides.push({ type: 'pair', photos: [remaining[i], remaining[i + 1]], score: 0 });
+      pairedSlides.push({ type: 'pair', pairType: 'random', photos: [remaining[i], remaining[i + 1]], score: 0 });
     }
 
     var leftoverSlides = [];
@@ -629,7 +658,7 @@
           cell.appendChild(img);
         }
         if (DEBUG) {
-          var b = createDebugBadge(slide.photos[i], va, slide.score);
+          var b = createDebugBadge(slide.photos[i], va, slide.score, slide.pairType);
           if (b) cell.appendChild(b);
         }
         container.appendChild(cell);
@@ -904,6 +933,7 @@
         photos[j].palette = item.palette || photos[j].palette;
         photos[j].phash = item.phash || photos[j].phash;
         photos[j].partners = item.partners || [];
+        photos[j].alt = item.alt || [];
       }
     }
     // Add new photos
@@ -916,6 +946,7 @@
         var newP = Object.assign({}, newList[m]);
         newP.src = 'photos/' + newList[m].f;
         newP.partners = newList[m].partners || [];
+        newP.alt = newList[m].alt || [];
         photos.push(newP);
       }
     }
@@ -1077,11 +1108,12 @@
   function initPhotos(list) {
     photos = list.map(function (item) {
       if (typeof item === 'string') {
-        return { f: item, src: item, w: 0, h: 0, partners: [] };
+        return { f: item, src: item, w: 0, h: 0, partners: [], alt: [] };
       }
       var p = Object.assign({}, item);
       p.src = 'photos/' + item.f;
       p.partners = item.partners || [];
+      p.alt = item.alt || [];
       return p;
     });
     start();

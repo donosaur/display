@@ -439,6 +439,27 @@
     border: 1px solid var(--denied-border);
   }
 
+  .source-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .source-badge.partner {
+    background: #fdf4ff;
+    color: #86198f;
+    border: 1px solid #f5d0fe;
+  }
+
+  .source-badge.alt {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+  }
+
   /* Photos Stage: Stacked Mode (Echo Show 15 1080x1920 portrait split) */
   .view-stacked .photos-stage {
     display: flex;
@@ -1082,7 +1103,7 @@
       neverMap[normPairKey(p[0], p[1])] = true;
     });
 
-    // 1. Process suggested partners from photos.json
+    // 1. Process suggested partners and alts from photos.json
     allPhotos.forEach(function (p1) {
       var partners = p1.partners || [];
       partners.forEach(function (item) {
@@ -1099,18 +1120,45 @@
 
           pairsMap[key] = {
             key: key,
+            source: 'partner',
             p1: p1.f < p2.f ? p1 : p2,
             p2: p1.f < p2.f ? p2 : p1,
             score: state === 'confirmed' ? 1.0 : state === 'denied' ? 0.0 : score,
             originalScore: score,
             state: state,
-            reasons: computePairReasons(p1, p2, score)
+            reasons: computePairReasons(p1, p2, score, 'partner')
+          };
+        }
+      });
+
+      var alts = p1.alt || [];
+      alts.forEach(function (item) {
+        var p2fn = item[0];
+        var score = item[1];
+        var p2 = photoMap[p2fn];
+        if (!p2) return;
+
+        var key = normPairKey(p1.f, p2.f);
+        if (!pairsMap[key]) {
+          var state = 'suggested';
+          if (alwaysMap[key]) state = 'confirmed';
+          else if (neverMap[key]) state = 'denied';
+
+          pairsMap[key] = {
+            key: key,
+            source: 'alt',
+            p1: p1.f < p2.f ? p1 : p2,
+            p2: p1.f < p2.f ? p2 : p1,
+            score: state === 'confirmed' ? 1.0 : state === 'denied' ? 0.0 : score,
+            originalScore: score,
+            state: state,
+            reasons: computePairReasons(p1, p2, score, 'alt')
           };
         }
       });
     });
 
-    // 2. Process any manual always_pair / never_pair that weren't in top 10
+    // 2. Process any manual always_pair / never_pair that weren't in top lists
     (overrides.always_pair || []).forEach(function (p) {
       var key = normPairKey(p[0], p[1]);
       if (!pairsMap[key]) {
@@ -1119,12 +1167,13 @@
         if (p1 && p2) {
           pairsMap[key] = {
             key: key,
+            source: 'manual',
             p1: p1.f < p2.f ? p1 : p2,
             p2: p1.f < p2.f ? p2 : p1,
             score: 1.0,
             originalScore: 0.0,
             state: 'confirmed',
-            reasons: computePairReasons(p1, p2, 1.0)
+            reasons: computePairReasons(p1, p2, 1.0, 'manual')
           };
         }
       }
@@ -1138,12 +1187,13 @@
         if (p1 && p2) {
           pairsMap[key] = {
             key: key,
+            source: 'manual',
             p1: p1.f < p2.f ? p1 : p2,
             p2: p1.f < p2.f ? p2 : p1,
             score: 0.0,
             originalScore: 0.0,
             state: 'denied',
-            reasons: computePairReasons(p1, p2, 0.0)
+            reasons: computePairReasons(p1, p2, 0.0, 'manual')
           };
         }
       }
@@ -1152,8 +1202,11 @@
     allPairs = Object.values(pairsMap);
   }
 
-  function computePairReasons(p1, p2, score) {
+  function computePairReasons(p1, p2, score, source) {
     var reasons = [];
+    if (source === 'alt') {
+      reasons.push({ text: 'Color compatibility alone (alt): ' + Number(score).toFixed(2), type: 'positive' });
+    }
 
     // Date
     if (p1.date && p2.date) {
@@ -1400,6 +1453,11 @@
       var rightBadges = document.createElement('div');
       rightBadges.className = 'header-badges';
 
+      var sourceBadge = document.createElement('span');
+      sourceBadge.className = 'source-badge ' + (pair.source || 'partner');
+      sourceBadge.textContent = pair.source || 'partner';
+      sourceBadge.title = 'Pair source: ' + (pair.source || 'partner');
+
       var scoreBadge = document.createElement('span');
       scoreBadge.className = 'score-badge' + (pair.score >= 0.5 ? ' high' : '') + (pair.state === 'confirmed' ? ' confirmed' : '');
       scoreBadge.textContent = pair.score.toFixed(3);
@@ -1409,6 +1467,7 @@
       stateBadge.className = 'state-badge ' + pair.state;
       stateBadge.textContent = pair.state;
 
+      rightBadges.appendChild(sourceBadge);
       rightBadges.appendChild(scoreBadge);
       rightBadges.appendChild(stateBadge);
 

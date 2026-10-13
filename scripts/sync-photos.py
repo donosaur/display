@@ -952,8 +952,62 @@ def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2, never_pair=None, always_pair=
     return max(0.0, min(1.0, score))
 
 
+def score_color_alone(p1, p2, lab_pal1, lab_pal2, never_pair=None):
+    """Compute color compatibility score in 0..1 alone between two photos, with hard penalties applied and no threshold."""
+    never_pair = never_pair or set()
+
+    p1_f, p2_f = p1["f"], p2["f"]
+    p1_stem = os.path.splitext(p1_f)[0]
+    p2_stem = os.path.splitext(p2_f)[0]
+
+    pair_key = (min(p1_f, p2_f), max(p1_f, p2_f))
+    pair_key_stem = (min(p1_stem, p2_stem), max(p1_stem, p2_stem))
+
+    if pair_key in never_pair or pair_key_stem in never_pair:
+        return 0.0
+
+    # Hard penalty 1: phash Hamming distance <= 10
+    phash_dist = hamming_distance(p1["phash"], p2["phash"])
+    if phash_dist <= HARD_PENALTY_PHASH_DIST:
+        return 0.0
+
+    t1 = p1.get("tags")
+    t2 = p2.get("tags")
+
+    # Hard penalty 2: one is_bw and the other color
+    if t1 and t2:
+        if t1.get("is_bw") != t2.get("is_bw"):
+            return 0.0
+    else:
+        is_bw1 = t1.get("is_bw") if t1 else (p1["sat"] < 0.05)
+        is_bw2 = t2.get("is_bw") if t2 else (p2["sat"] < 0.05)
+        if is_bw1 != is_bw2:
+            return 0.0
+
+    # Hard penalty 3: either has subject text-screenshot
+    if t1 and "text-screenshot" in (t1.get("subjects") or []):
+        return 0.0
+    if t2 and "text-screenshot" in (t2.get("subjects") or []):
+        return 0.0
+
+    # Color compatibility formula
+    luma_diff = abs(p1["luma"] - p2["luma"])
+    sat_diff = abs(p1["sat"] - p2["sat"])
+    warmth_diff = abs(p1["warmth"] - p2["warmth"]) / 2.0
+    lab_dist = compute_palette_lab_dist(lab_pal1, lab_pal2)
+    pal_dist_norm = min(1.0, lab_dist / 100.0)
+
+    color_blend = 0.25 * luma_diff + 0.25 * sat_diff + 0.25 * warmth_diff + 0.25 * pal_dist_norm
+    color_compat = max(0.0, 1.0 - color_blend)
+
+    if luma_diff > SOFT_PENALTY_LUMA_DIFF:
+        color_compat *= SOFT_PENALTY_FACTOR
+
+    return max(0.0, min(1.0, color_compat))
+
+
 def compute_all_pair_scores(manifest, overrides=None):
-    """Compute pairwise scores for all photos, apply overrides, and attach top 10 partners (score >= 0.2) to each."""
+    """Compute pairwise scores for all photos, apply overrides, attach top 10 partners and top 5 color alts."""
     overrides = overrides or {}
     never_pair = overrides.get("never_pair", set())
     always_pair = overrides.get("always_pair", set())
@@ -965,8 +1019,9 @@ def compute_all_pair_scores(manifest, overrides=None):
     parsed_dates = [parse_iso_date(p.get("date")) for p in manifest]
     lab_palettes = [[hex_to_lab(h) for h in p.get("palette", [])] for p in manifest]
 
-    # Matrix of partner scores
+    # Matrix of partner and alt scores
     partners_by_photo = [[] for _ in range(n)]
+    alt_by_photo = [[] for _ in range(n)]
 
     for i in range(n):
         p1 = manifest[i]
@@ -983,10 +1038,19 @@ def compute_all_pair_scores(manifest, overrides=None):
                 partners_by_photo[i].append((p2["f"], round(s, 3)))
                 partners_by_photo[j].append((p1["f"], round(s, 3)))
 
+            c = score_color_alone(p1, p2, lab1, lab2, never_pair=never_pair)
+            if c > 0:
+                alt_by_photo[i].append((p2["f"], round(c, 2)))
+                alt_by_photo[j].append((p1["f"], round(c, 2)))
+
     # Sort each photo's partners descending by score and truncate to top MAX_PARTNERS
+    # and sort each photo's alt descending by score and truncate to top 5
     for i in range(n):
         sorted_partners = sorted(partners_by_photo[i], key=lambda x: x[1], reverse=True)
         manifest[i]["partners"] = [[fn, sc] for fn, sc in sorted_partners[:MAX_PARTNERS]]
+
+        sorted_alt = sorted(alt_by_photo[i], key=lambda x: x[1], reverse=True)
+        manifest[i]["alt"] = [[fn, sc] for fn, sc in sorted_alt[:5]]
 
     # Ensure always_pair entries are set to 1.0 at the very top of both partner lists
     fn_to_idx = {p["f"]: idx for idx, p in enumerate(manifest)}
@@ -1009,8 +1073,12 @@ def compute_all_pair_scores(manifest, overrides=None):
 
     # Stats
     has_partners = sum(1 for p in manifest if len(p.get("partners", [])) > 0)
+    has_alts = sum(1 for p in manifest if len(p.get("alt", [])) > 0)
     total_partner_links = sum(len(p.get("partners", [])) for p in manifest)
-    print(f"Partner scoring complete: {has_partners}/{n} photos have >= 1 partner (average {total_partner_links / max(1, n):.1f} partners).")
+    print(
+        f"Partner scoring complete: {has_partners}/{n} photos have >= 1 partner (avg {total_partner_links / max(1, n):.1f}); "
+        f"{has_alts}/{n} photos have >= 1 alt color partner."
+    )
 
 
 def sync_photos(takeout_dir=None, retag=False):
