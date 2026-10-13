@@ -626,8 +626,8 @@
 
   /* Card Actions Bar */
   .card-actions {
-    padding: 10px 14px;
-    border-top: 1px solid var(--border-subtle);
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border-subtle);
     background: #fafaf9;
     display: flex;
     align-items: center;
@@ -1462,6 +1462,58 @@
       f2Info.appendChild(f2Date);
       frame2.appendChild(f2Info);
 
+      // Card Actions
+      var actions = document.createElement('div');
+      actions.className = 'card-actions';
+
+      var btnGroup = document.createElement('div');
+      btnGroup.className = 'action-buttons';
+
+      // Confirm Button
+      var confirmBtn = document.createElement('button');
+      confirmBtn.className = 'action-btn confirm-btn' + (pair.state === 'confirmed' ? ' active' : '');
+      confirmBtn.innerHTML = '✓ Confirm';
+      confirmBtn.title = 'Always pair these two photos (Key: C)';
+      confirmBtn.addEventListener('click', function () {
+        confirmPair(pair.key);
+      });
+
+      // Deny Button
+      var denyBtn = document.createElement('button');
+      denyBtn.className = 'action-btn deny-btn' + (pair.state === 'denied' ? ' active' : '');
+      denyBtn.innerHTML = '✕ Deny';
+      denyBtn.title = 'Never pair these two photos (Key: D)';
+      denyBtn.addEventListener('click', function () {
+        denyPair(pair.key);
+      });
+
+      // Reset Button
+      var resetBtn = document.createElement('button');
+      resetBtn.className = 'action-btn reset-btn';
+      resetBtn.innerHTML = '↺ Reset';
+      resetBtn.title = 'Reset to algorithm suggestion (Key: R)';
+      resetBtn.addEventListener('click', function () {
+        resetPair(pair.key);
+      });
+
+      btnGroup.appendChild(confirmBtn);
+      btnGroup.appendChild(denyBtn);
+      if (pair.state !== 'suggested') {
+        btnGroup.appendChild(resetBtn);
+      }
+
+      var kioskViewLink = document.createElement('a');
+      kioskViewLink.href = 'index.html?debug=1';
+      kioskViewLink.target = '_blank';
+      kioskViewLink.style.fontSize = '11px';
+      kioskViewLink.style.color = 'var(--text-muted)';
+      kioskViewLink.style.textDecoration = 'none';
+      kioskViewLink.textContent = 'Preview in kiosk &rarr;';
+
+      actions.appendChild(btnGroup);
+      actions.appendChild(kioskViewLink);
+      card.appendChild(actions);
+
       stage.appendChild(frame1);
       stage.appendChild(frame2);
       card.appendChild(stage);
@@ -1518,58 +1570,6 @@
       }
 
       card.appendChild(meta);
-
-      // Card Actions
-      var actions = document.createElement('div');
-      actions.className = 'card-actions';
-
-      var btnGroup = document.createElement('div');
-      btnGroup.className = 'action-buttons';
-
-      // Confirm Button
-      var confirmBtn = document.createElement('button');
-      confirmBtn.className = 'action-btn confirm-btn' + (pair.state === 'confirmed' ? ' active' : '');
-      confirmBtn.innerHTML = '✓ Confirm';
-      confirmBtn.title = 'Always pair these two photos (Key: C)';
-      confirmBtn.addEventListener('click', function () {
-        confirmPair(pair.key);
-      });
-
-      // Deny Button
-      var denyBtn = document.createElement('button');
-      denyBtn.className = 'action-btn deny-btn' + (pair.state === 'denied' ? ' active' : '');
-      denyBtn.innerHTML = '✕ Deny';
-      denyBtn.title = 'Never pair these two photos (Key: D)';
-      denyBtn.addEventListener('click', function () {
-        denyPair(pair.key);
-      });
-
-      // Reset Button
-      var resetBtn = document.createElement('button');
-      resetBtn.className = 'action-btn reset-btn';
-      resetBtn.innerHTML = '↺ Reset';
-      resetBtn.title = 'Reset to algorithm suggestion (Key: R)';
-      resetBtn.addEventListener('click', function () {
-        resetPair(pair.key);
-      });
-
-      btnGroup.appendChild(confirmBtn);
-      btnGroup.appendChild(denyBtn);
-      if (pair.state !== 'suggested') {
-        btnGroup.appendChild(resetBtn);
-      }
-
-      var kioskViewLink = document.createElement('a');
-      kioskViewLink.href = 'index.html?debug=1';
-      kioskViewLink.target = '_blank';
-      kioskViewLink.style.fontSize = '11px';
-      kioskViewLink.style.color = 'var(--text-muted)';
-      kioskViewLink.style.textDecoration = 'none';
-      kioskViewLink.textContent = 'Preview in kiosk &rarr;';
-
-      actions.appendChild(btnGroup);
-      actions.appendChild(kioskViewLink);
-      card.appendChild(actions);
 
       fragment.appendChild(card);
     });
