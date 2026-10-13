@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="build" content="2026-10-12T21:41:00Z">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -671,16 +672,98 @@
     }
   }
 
-  function scheduleNightlyReload() {
-    var now = new Date();
-    var next4am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0, 0);
-    if (now.getTime() >= next4am.getTime()) {
-      next4am.setDate(next4am.getDate() + 1);
+  var pageStartTime = Date.now();
+  var buildMetaEl = document.querySelector('meta[name="build"]');
+  var CURRENT_BUILD = buildMetaEl ? buildMetaEl.getAttribute('content') : '';
+
+  function mergePhotos(newList) {
+    if (!newList || !Array.isArray(newList)) return;
+    var newMap = {};
+    for (var i = 0; i < newList.length; i++) {
+      newMap[newList[i].f] = newList[i];
     }
-    var msUntil4am = next4am.getTime() - now.getTime();
-    setTimeout(function () {
-      location.reload();
-    }, msUntil4am);
+    // Drop removed photos
+    photos = photos.filter(function (p) {
+      return !!newMap[p.f];
+    });
+    // Update existing photos
+    for (var j = 0; j < photos.length; j++) {
+      var item = newMap[photos[j].f];
+      if (item) {
+        photos[j].w = item.w || photos[j].w;
+        photos[j].h = item.h || photos[j].h;
+        photos[j].date = item.date || null;
+        photos[j].geo = item.geo || null;
+        photos[j].tags = item.tags || null;
+        photos[j].caption = item.caption || null;
+        photos[j].luma = item.luma !== undefined ? item.luma : photos[j].luma;
+        photos[j].sat = item.sat !== undefined ? item.sat : photos[j].sat;
+        photos[j].warmth = item.warmth !== undefined ? item.warmth : photos[j].warmth;
+        photos[j].palette = item.palette || photos[j].palette;
+        photos[j].phash = item.phash || photos[j].phash;
+        photos[j].partners = item.partners || [];
+      }
+    }
+    // Add new photos
+    var existingMap = {};
+    for (var k = 0; k < photos.length; k++) {
+      existingMap[photos[k].f] = true;
+    }
+    for (var m = 0; m < newList.length; m++) {
+      if (!existingMap[newList[m].f]) {
+        var newP = Object.assign({}, newList[m]);
+        newP.src = 'photos/' + newList[m].f;
+        newP.partners = newList[m].partners || [];
+        photos.push(newP);
+      }
+    }
+  }
+
+  function checkMaintenance() {
+    var now = new Date();
+    // 1. Fallback full reload: only if up > 7 days, at 4am, and online
+    if (now.getHours() === 4 && (Date.now() - pageStartTime) > 7 * 24 * 60 * 60 * 1000) {
+      if (navigator.onLine !== false) {
+        location.reload();
+        return;
+      }
+    }
+
+    // 2. Fetch photos.json with no-cache and merge updates
+    fetch('photos/photos.json', { cache: 'no-cache' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (newList) {
+        mergePhotos(newList);
+      })
+      .catch(function () {});
+
+    // 3. Fetch / with cache: 'no-store', parse build meta, reload only if changed and fetch succeeded and online
+    if (navigator.onLine !== false) {
+      fetch('/', { cache: 'no-store' })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        })
+        .then(function (html) {
+          if (!html || navigator.onLine === false) return;
+          var m = html.match(/<meta\s+name=["']build["']\s+content=["']([^"']+)["']/i);
+          if (m && m[1]) {
+            var remoteBuild = m[1];
+            if (CURRENT_BUILD && remoteBuild !== CURRENT_BUILD) {
+              location.reload();
+            }
+          }
+        })
+        .catch(function () {});
+    }
+  }
+
+  function startPeriodicMaintenance() {
+    var checkInterval = DEBUG ? 5000 : 3600000;
+    setInterval(checkMaintenance, checkInterval);
   }
 
   function start() {
@@ -692,7 +775,7 @@
     slideQueue = buildSlideQueue(photos, vp.va);
     slideIdx = 0;
     show(0);
-    scheduleNightlyReload();
+    startPeriodicMaintenance();
   }
 
   var resizeTimer = null;

@@ -1159,6 +1159,28 @@ def sync_photos(takeout_dir=None, retag=False):
 
     print(f"\nWrote {len(manifest)} photos to compact {MANIFEST_PATH} and debug {DEBUG_MANIFEST_PATH}.")
 
+    # 10. Update build version meta tag in index.html
+    index_html_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "index.html")
+    if os.path.isfile(index_html_path):
+        build_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(index_html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        if re.search(r'<meta\s+name=["\']build["\']', html_content):
+            html_content = re.sub(
+                r'<meta\s+name=["\']build["\']\s+content=["\'][^"\']*["\']',
+                f'<meta name="build" content="{build_timestamp}">',
+                html_content
+            )
+        else:
+            html_content = re.sub(
+                r'(<meta\s+name=["\']viewport["\'][^>]*>)',
+                f'\\1\n<meta name="build" content="{build_timestamp}">',
+                html_content
+            )
+        with open(index_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"Updated index.html build version to {build_timestamp}.")
+
     # 10. Print date and location summary
     total = len(manifest)
     total_with_date = total - date_counts["None"]
