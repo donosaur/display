@@ -365,7 +365,7 @@
   }
 
   function pickWeightedPartner(candidates) {
-    if (candidates.length === 1) return candidates[0];
+    if (!SHUFFLE || candidates.length === 1) return candidates[0];
     var totalWeight = 0;
     for (var i = 0; i < candidates.length; i++) {
       totalWeight += Math.max(0.001, candidates[i][1]);
@@ -391,6 +391,7 @@
 
   var photoFailures = {};
   var roundFailedPhotos = {};
+  var shownPhotosThisRound = {};
   var globalSuccessLoads = 0;
   var consecutiveSlideFailures = 0;
   var retryTimer = null;
@@ -590,20 +591,20 @@
     var allSlides = [].concat(tripleSlides, pairedSlides, singleSlides, leftoverSlides);
     if (SHUFFLE) {
       shuffle(allSlides);
-    }
 
-    // Bonus: avoid showing two consecutive slides from the same date where possible
-    for (var k = 1; k < allSlides.length - 1; k++) {
-      var dPrev = getSlideDate(allSlides[k - 1]);
-      var dCur = getSlideDate(allSlides[k]);
-      if (dPrev && dCur && dPrev === dCur) {
-        for (var m = k + 1; m < allSlides.length; m++) {
-          var dCandidate = getSlideDate(allSlides[m]);
-          if (dCandidate !== dPrev) {
-            var tmp = allSlides[k];
-            allSlides[k] = allSlides[m];
-            allSlides[m] = tmp;
-            break;
+      // Bonus: avoid showing two consecutive slides from the same date where possible
+      for (var k = 1; k < allSlides.length - 1; k++) {
+        var dPrev = getSlideDate(allSlides[k - 1]);
+        var dCur = getSlideDate(allSlides[k]);
+        if (dPrev && dCur && dPrev === dCur) {
+          for (var m = k + 1; m < allSlides.length; m++) {
+            var dCandidate = getSlideDate(allSlides[m]);
+            if (dCandidate !== dPrev) {
+              var tmp = allSlides[k];
+              allSlides[k] = allSlides[m];
+              allSlides[m] = tmp;
+              break;
+            }
           }
         }
       }
@@ -788,20 +789,34 @@
         }
 
         var vp = getViewportSize();
-        slideQueue = buildSlideQueue(photos, vp.va);
+        var unshown = photos.filter(function (p) {
+          var k = p.f || p.src;
+          return !shownPhotosThisRound[k] && !roundFailedPhotos[k];
+        });
+        if (!unshown.length) {
+          wrapQueue();
+        } else {
+          slideQueue = buildSlideQueue(unshown, vp.va);
+          slideIdx = 0;
+        }
         if (!slideQueue.length) {
           if (slideTimer) { clearTimeout(slideTimer); slideTimer = null; }
           if (retryTimer) { clearTimeout(retryTimer); }
           retryTimer = setTimeout(function () { show(0); }, 30000);
           return;
         }
-        show(curIdx);
+        show(0);
         return;
       }
 
       consecutiveSlideFailures = 0;
       if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
       globalSuccessLoads += results.length;
+
+      targetSlide.photos.forEach(function (p) {
+        var k = p.f || p.src;
+        if (k) shownPhotosThisRound[k] = true;
+      });
 
       var loadedImages = results.map(function (r) { return r.img; });
       targetSlide._images = loadedImages;
@@ -859,6 +874,7 @@
 
   function wrapQueue() {
     roundFailedPhotos = {};
+    shownPhotosThisRound = {};
     var lastSlide = slideQueue[slideIdx];
     var lastPhotos = lastSlide ? lastSlide.photos : [];
     if (SHUFFLE) {
@@ -1001,6 +1017,8 @@
 
   function start() {
     if (!photos.length) return;
+    roundFailedPhotos = {};
+    shownPhotosThisRound = {};
     if (SHUFFLE) shuffle(photos);
     var vp = getViewportSize();
     lastVa = vp.va;
@@ -1029,30 +1047,38 @@
       }
     }
 
-    var currentPhoto = null;
-    if (slideQueue[slideIdx] && slideQueue[slideIdx].photos.length) {
-      currentPhoto = slideQueue[slideIdx].photos[0];
-    }
+    var curSlide = slideQueue[slideIdx];
+    var curSlidePhotos = (curSlide && curSlide.photos) ? curSlide.photos : [];
 
     if (pairableChanged) {
-      slideQueue = buildSlideQueue(photos, vp.va);
       lastVa = vp.va;
       lastIsPortrait = isPortrait;
-      var newIdx = 0;
-      if (currentPhoto) {
-        var found = false;
-        for (var i = 0; i < slideQueue.length; i++) {
-          for (var j = 0; j < slideQueue[i].photos.length; j++) {
-            if (slideQueue[i].photos[j].f === currentPhoto.f || slideQueue[i].photos[j].src === currentPhoto.src) {
-              newIdx = i;
-              found = true;
-              break;
-            }
-          }
-          if (found) break;
-        }
+
+      curSlidePhotos.forEach(function (p) {
+        var k = p.f || p.src;
+        if (k) shownPhotosThisRound[k] = true;
+      });
+
+      var curSlideNew = curSlidePhotos.length ? buildSlideQueue(curSlidePhotos, vp.va) : [];
+      if (curSlideNew.length && curSlide && curSlide._images) {
+        curSlideNew.forEach(function (cs) {
+          cs._images = cs.photos.map(function (p) {
+            var idx = curSlide.photos.indexOf(p);
+            return idx >= 0 ? curSlide._images[idx] : null;
+          });
+        });
       }
-      slideIdx = newIdx;
+
+      var unshown = photos.filter(function (p) {
+        var k = p.f || p.src;
+        return !shownPhotosThisRound[k] && !roundFailedPhotos[k];
+      });
+      var remainingQueue = unshown.length ? buildSlideQueue(unshown, vp.va) : [];
+      slideQueue = curSlideNew.concat(remainingQueue);
+      if (!slideQueue.length) {
+        wrapQueue();
+      }
+      slideIdx = 0;
     } else {
       lastVa = vp.va;
       lastIsPortrait = isPortrait;
@@ -1317,11 +1343,15 @@
       getFront: function() { return front; },
       getSlides: function() { return slides; },
       getSlideTimer: function() { return slideTimer; },
+      getShownPhotos: function() { return shownPhotosThisRound; },
+      getRoundFailedPhotos: function() { return roundFailedPhotos; },
       getViewportSize: getViewportSize,
       buildSlideQueue: buildSlideQueue,
       renderSlide: renderSlide,
       show: show,
       next: next,
+      wrapQueue: wrapQueue,
+      handleResize: handleResize,
       loadImage: loadImage
     };
   }
