@@ -525,6 +525,9 @@
     }, duration);
   }
 
+  var lastVa = null;
+  var lastIsPortrait = null;
+
   function wrapQueue() {
     var lastSlide = slideQueue[slideIdx];
     var lastPhotos = lastSlide ? lastSlide.photos : [];
@@ -532,6 +535,8 @@
       shuffle(photos);
     }
     var vp = getViewportSize();
+    lastVa = vp.va;
+    lastIsPortrait = vp.va < 1;
     slideQueue = buildSlideQueue(photos, vp.va);
     if (slideQueue.length > 1 && lastPhotos.length > 0) {
       var firstShares = slideQueue[0].photos.some(function (p1) {
@@ -584,6 +589,8 @@
     if (!photos.length) return;
     if (SHUFFLE) shuffle(photos);
     var vp = getViewportSize();
+    lastVa = vp.va;
+    lastIsPortrait = vp.va < 1;
     slideQueue = buildSlideQueue(photos, vp.va);
     slideIdx = 0;
     show(0);
@@ -593,26 +600,51 @@
   var resizeTimer = null;
   function handleResize() {
     if (!photos.length || !slideQueue.length) return;
+    ++showSeq;
+
+    var vp = getViewportSize();
+    var isPortrait = vp.va < 1;
+    var pairableChanged = (lastIsPortrait !== null && lastIsPortrait !== isPortrait);
+    if (!pairableChanged && lastVa !== null) {
+      for (var pIdx = 0; pIdx < photos.length; pIdx++) {
+        if (isPairable(photos[pIdx], vp.va) !== isPairable(photos[pIdx], lastVa)) {
+          pairableChanged = true;
+          break;
+        }
+      }
+    }
+
     var currentPhoto = null;
     if (slideQueue[slideIdx] && slideQueue[slideIdx].photos.length) {
       currentPhoto = slideQueue[slideIdx].photos[0];
     }
-    var vp = getViewportSize();
-    slideQueue = buildSlideQueue(photos, vp.va);
-    var newIdx = 0;
-    if (currentPhoto) {
-      for (var i = 0; i < slideQueue.length; i++) {
-        for (var j = 0; j < slideQueue[i].photos.length; j++) {
-          if (slideQueue[i].photos[j].f === currentPhoto.f || slideQueue[i].photos[j].src === currentPhoto.src) {
-            newIdx = i;
-            break;
+
+    if (pairableChanged) {
+      slideQueue = buildSlideQueue(photos, vp.va);
+      lastVa = vp.va;
+      lastIsPortrait = isPortrait;
+      var newIdx = 0;
+      if (currentPhoto) {
+        var found = false;
+        for (var i = 0; i < slideQueue.length; i++) {
+          for (var j = 0; j < slideQueue[i].photos.length; j++) {
+            if (slideQueue[i].photos[j].f === currentPhoto.f || slideQueue[i].photos[j].src === currentPhoto.src) {
+              newIdx = i;
+              found = true;
+              break;
+            }
           }
+          if (found) break;
         }
-        if (newIdx === i) break;
       }
+      slideIdx = newIdx;
+    } else {
+      lastVa = vp.va;
+      lastIsPortrait = isPortrait;
     }
-    slideIdx = newIdx;
+
     renderSlide(slides[front], slideQueue[slideIdx], vp.va);
+    scheduleNext();
   }
   function onResize() {
     clearTimeout(resizeTimer);
