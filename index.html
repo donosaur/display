@@ -42,6 +42,18 @@
   .pair-container .cell {
     flex: 1 1 0; min-width: 0; min-height: 0;
   }
+  .triple-container {
+    display: flex; width: 100%; height: 100%; background: #000;
+  }
+  .triple-container.portrait-split {
+    flex-direction: column; gap: 3px;
+  }
+  .triple-container.landscape-split {
+    flex-direction: row; gap: 3px;
+  }
+  .triple-container .cell {
+    flex: 1 1 0; min-width: 0; min-height: 0;
+  }
   .leftover-container {
     position: relative; width: 100%; height: 100%; background: #000; overflow: hidden;
   }
@@ -148,6 +160,9 @@
   // debug: 1 overlays each image filename, dimensions, and computed loss
   var DEBUG = urlParams.get('debug') === '1';
 
+  // stack: 3 enables 3-up vertical split for wide photos in portrait (mirror in landscape)
+  var STACK3 = urlParams.get('stack') === '3';
+
   /* ================= slideshow ================= */
   var slides = [
     document.getElementById('slide-a'),
@@ -240,15 +255,48 @@
     return 1 - (minA / maxA);
   }
 
-  function isPairable(img, va) {
-    if (LAYOUT === 'single') return false;
-    if (!img || !img.w || !img.h) return false;
+  function losses(img, va) {
+    if (!img || !img.w || !img.h) return null;
     var ia = img.w / img.h;
     var caFull = va;
     var caHalf = (va < 1) ? (2 * va) : (va / 2);
+    var caThird = (va < 1) ? (3 * va) : (va / 3);
     var lossFull = cropLoss(ia, caFull);
     var lossHalf = cropLoss(ia, caHalf);
-    return (lossFull - lossHalf) >= 0.15;
+    var lossThird = cropLoss(ia, caThird);
+    return {
+      ia: ia,
+      full: lossFull,
+      half: lossHalf,
+      third: lossThird,
+      pairDiff: lossFull - lossHalf,
+      stack3Diff: lossHalf - lossThird
+    };
+  }
+
+  function isPairable(img, va) {
+    if (LAYOUT === 'single') return false;
+    var l = losses(img, va);
+    return l ? (l.pairDiff >= 0.15) : false;
+  }
+
+  function isStack3(img, va) {
+    if (!STACK3 || LAYOUT === 'single') return false;
+    var l = losses(img, va);
+    return l ? (l.stack3Diff >= 0.15) : false;
+  }
+
+  function getPairScore(p1, p2) {
+    if (!p1 || !p2) return 0;
+    var p1Partners = p1.partners || [];
+    for (var k = 0; k < p1Partners.length; k++) {
+      if (p1Partners[k][0] === p2.f) return p1Partners[k][1];
+    }
+    var p2Partners = p2.partners || [];
+    for (var k = 0; k < p2Partners.length; k++) {
+      if (p2Partners[k][0] === p1.f) return p2Partners[k][1];
+    }
+    return 0;
   }
 
   function createDebugBadge(photo, va, pairScore) {
@@ -262,13 +310,12 @@
     }
     lines.push(title);
     if (photo.w && photo.h) {
-      var ia = photo.w / photo.h;
-      var caFull = va;
-      var caHalf = (va < 1) ? (2 * va) : (va / 2);
-      var lossFull = cropLoss(ia, caFull);
-      var lossHalf = cropLoss(ia, caHalf);
-      var diff = lossFull - lossHalf;
-      lines.push('loss full: ' + lossFull.toFixed(3) + ' | half: ' + lossHalf.toFixed(3) + ' (Δ ' + diff.toFixed(3) + ')');
+      var l = losses(photo, va);
+      if (l) {
+        var lossLine = 'loss full: ' + l.full.toFixed(3) + ' | half: ' + l.half.toFixed(3);
+        lossLine += ' | third: ' + l.third.toFixed(3) + ' (Δh ' + l.pairDiff.toFixed(3) + ' / Δ3 ' + l.stack3Diff.toFixed(3) + ')';
+        lines.push(lossLine);
+      }
     }
     if (pairScore !== undefined && pairScore !== null) {
       lines.push('pair score: ' + Number(pairScore).toFixed(3));
@@ -335,13 +382,16 @@
     var isPairMap = {};
     var nonPairable = [];
     var pairable = [];
+    var stack3Candidates = [];
 
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
       var key = p.f || p.src;
       if (roundFailedPhotos[key]) continue;
       photoMap[p.f] = p;
-      if (isPairable(p, va)) {
+      if (isStack3(p, va)) {
+        stack3Candidates.push(p);
+      } else if (isPairable(p, va)) {
         isPairMap[p.f] = true;
         pairable.push(p);
       } else {
@@ -350,11 +400,61 @@
     }
 
     if (SHUFFLE) {
+      shuffle(stack3Candidates);
       shuffle(pairable);
       shuffle(nonPairable);
     }
 
     var used = {};
+    var tripleSlides = [];
+
+    // Group three photos whose third-cell loss is at least 0.15 lower than half-cell loss
+    // choosing the group by partner score where possible
+    if (STACK3 && stack3Candidates.length >= 3) {
+      for (var s = 0; s < stack3Candidates.length; s++) {
+        var p1 = stack3Candidates[s];
+        if (used[p1.f]) continue;
+
+        var available = stack3Candidates.filter(function (c) {
+          return !used[c.f] && c.f !== p1.f;
+        });
+        if (available.length < 2) break;
+
+        var bestPair = null;
+        var bestScore = -1;
+
+        for (var a = 0; a < available.length; a++) {
+          for (var b = a + 1; b < available.length; b++) {
+            var candA = available[a];
+            var candB = available[b];
+            var sc = (getPairScore(p1, candA) + getPairScore(p1, candB) + getPairScore(candA, candB)) / 3;
+            if (sc > bestScore) {
+              bestScore = sc;
+              bestPair = [candA, candB];
+            }
+          }
+        }
+
+        if (bestPair) {
+          used[p1.f] = true;
+          used[bestPair[0].f] = true;
+          used[bestPair[1].f] = true;
+          tripleSlides.push({
+            type: 'triple',
+            photos: [p1, bestPair[0], bestPair[1]],
+            score: Math.max(0, bestScore)
+          });
+        }
+      }
+    }
+
+    // Leftovers fall back to pairing, then to the blurred single
+    var leftoverStack3 = stack3Candidates.filter(function (p) { return !used[p.f]; });
+    for (var ls = 0; ls < leftoverStack3.length; ls++) {
+      isPairMap[leftoverStack3[ls].f] = true;
+      pairable.push(leftoverStack3[ls]);
+    }
+
     var pairedSlides = [];
 
     // Pass 1: For each unpaired photo, pick from top 3 unused pairable partners (score-weighted)
@@ -439,7 +539,7 @@
       return { type: 'single', photos: [p] };
     });
 
-    var allSlides = [].concat(pairedSlides, singleSlides, leftoverSlides);
+    var allSlides = [].concat(tripleSlides, pairedSlides, singleSlides, leftoverSlides);
     if (SHUFFLE) {
       shuffle(allSlides);
     }
@@ -492,6 +592,33 @@
     } else if (slide.type === 'pair') {
       var container = document.createElement('div');
       container.className = 'pair-container ' + (va < 1 ? 'portrait-split' : 'landscape-split');
+      for (var i = 0; i < slide.photos.length; i++) {
+        var cell = document.createElement('div');
+        cell.className = 'cell';
+        var img = (images && images[i]) ? images[i] : null;
+        if (!img && slide.photos[i]) {
+          img = new Image();
+          img.src = photoSrc(slide.photos[i]);
+        }
+        if (img) {
+          img.className = 'slide-img';
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          img.style.objectPosition = 'center';
+          img.style.display = 'block';
+          cell.appendChild(img);
+        }
+        if (DEBUG) {
+          var b = createDebugBadge(slide.photos[i], va, slide.score);
+          if (b) cell.appendChild(b);
+        }
+        container.appendChild(cell);
+      }
+      slideEl.appendChild(container);
+    } else if (slide.type === 'triple') {
+      var container = document.createElement('div');
+      container.className = 'triple-container ' + (va < 1 ? 'portrait-split' : 'landscape-split');
       for (var i = 0; i < slide.photos.length; i++) {
         var cell = document.createElement('div');
         cell.className = 'cell';
@@ -654,7 +781,7 @@
 
   var slideTimer = null;
   function getSlideDuration(slide) {
-    if (slide && slide.type === 'pair') {
+    if (slide && (slide.type === 'pair' || slide.type === 'triple')) {
       return Math.round(SLIDE_MS * PAIR_HOLD);
     }
     return SLIDE_MS;
@@ -844,7 +971,8 @@
     var pairableChanged = (lastIsPortrait !== null && lastIsPortrait !== isPortrait);
     if (!pairableChanged && lastVa !== null) {
       for (var pIdx = 0; pIdx < photos.length; pIdx++) {
-        if (isPairable(photos[pIdx], vp.va) !== isPairable(photos[pIdx], lastVa)) {
+        if (isPairable(photos[pIdx], vp.va) !== isPairable(photos[pIdx], lastVa) ||
+            isStack3(photos[pIdx], vp.va) !== isStack3(photos[pIdx], lastVa)) {
           pairableChanged = true;
           break;
         }
