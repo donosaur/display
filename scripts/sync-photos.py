@@ -3,18 +3,26 @@
 
 Renames every image in photos/ to a content hash (first 10 hex characters of sha1 + extension),
 reads dimensions honoring EXIF orientation, extracts capture date and geo location
-(supporting Google Takeout exports and EXIF metadata fallback), writes photos/photos.json,
+(supporting Google Takeout exports and EXIF metadata fallback), tags photos visually
+using the Claude API with a fixed vocabulary, writes photos/photos.json,
 and reports images whose longest edge is under 1080px.
 """
 
 import argparse
+import base64
+import concurrent.futures
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import os
+import random
 import re
 import struct
 import sys
+import time
+import urllib.error
+import urllib.request
 
 # Ensure PIL and numpy can be imported from local .venv if run with system python
 try:
@@ -41,7 +49,25 @@ except ImportError:
 
 PHOTOS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "photos")
 MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
+TAGS_CACHE_PATH = os.path.join(PHOTOS_DIR, ".tags-cache.json")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Fixed vocabulary for visual tagging
+SCENES = [
+    "indoor-home", "indoor-venue", "restaurant", "street-city", "park-garden",
+    "beach-water", "mountains-nature", "travel-landmark", "stage-performance",
+    "event-party", "vehicle-transit", "other"
+]
+SUBJECTS = [
+    "people-group", "person-solo", "couple", "child", "baby", "cat", "dog",
+    "food-drink", "architecture", "landscape", "art-object", "text-screenshot"
+]
+PEOPLE_COUNTS = ["0", "1", "2", "3-5", "6+"]
+MOODS = ["calm", "joyful", "energetic", "formal", "moody"]
+TIMES_OF_DAY = ["day", "golden-hour", "night", "indoor-unknown"]
+EVENT_HINTS = [
+    "birthday", "wedding", "holiday", "concert-performance", "trip", "everyday", "meal", "other"
+]
 
 
 def get_dimensions_pillow(path):
@@ -228,10 +254,7 @@ def parse_exif_metadata(path):
 
 
 def find_takeout_sidecar(img_path, dir_json_map, json_title_map):
-    """Find the sidecar JSON file for a given image in Takeout export.
-    
-    Handles truncated filenames, supplemental-metadata.json, and title lookup.
-    """
+    """Find the sidecar JSON file for a given image in Takeout export."""
     dirname = os.path.dirname(img_path)
     basename = os.path.basename(img_path)
     stem, ext = os.path.splitext(basename)
@@ -256,7 +279,6 @@ def find_takeout_sidecar(img_path, dir_json_map, json_title_map):
     json_files = dir_json_map.get(dirname, [])
     for jf in json_files:
         jbase = os.path.basename(jf)
-        # Takeout often truncates filenames at ~47-51 chars before adding .json or .supple...
         prefix_len = min(len(stem), 40)
         if prefix_len >= 8 and jbase.startswith(stem[:prefix_len]):
             return jf
@@ -274,7 +296,6 @@ def load_takeout_metadata(takeout_dir, local_photos):
     dir_json_map = {}
     json_title_map = {}
 
-    # Gather images and json files in Takeout directory
     for root, _, files in os.walk(takeout_dir):
         jsons_in_dir = []
         for f in files:
@@ -284,7 +305,6 @@ def load_takeout_metadata(takeout_dir, local_photos):
                 takeout_images.append(full_path)
             elif ext == ".json" and not f.startswith("metadata.json"):
                 jsons_in_dir.append(full_path)
-                # Read title from JSON for mapping
                 try:
                     with open(full_path, "r", encoding="utf-8", errors="ignore") as jf:
                         data = json.load(jf)
@@ -298,7 +318,6 @@ def load_takeout_metadata(takeout_dir, local_photos):
 
     print(f"Found {len(takeout_images)} images and {len(json_title_map)} metadata files in Takeout.")
 
-    # Build lookup for local photos: sha1 -> photo_info, and compute phash for fallback
     local_by_sha1_10 = {}
     local_phashes = {}
 
@@ -312,8 +331,7 @@ def load_takeout_metadata(takeout_dir, local_photos):
         if phash:
             local_phashes[filename] = phash
 
-    # Match takeout photos to local photos
-    takeout_matches = {}  # local_filename -> {date, geo}
+    takeout_matches = {}
     matched_local_files = set()
 
     for t_img in takeout_images:
@@ -327,7 +345,6 @@ def load_takeout_metadata(takeout_dir, local_photos):
             if t_sha1_10 in local_by_sha1_10:
                 matched_file = local_by_sha1_10[t_sha1_10]
             else:
-                # Fallback: perceptual hash match
                 t_phash = compute_phash(t_img)
                 if t_phash:
                     best_match = None
@@ -339,14 +356,12 @@ def load_takeout_metadata(takeout_dir, local_photos):
                         if dist < best_dist:
                             best_dist = dist
                             best_match = lf
-                    # If very close (re-encoded copy of exact same image)
                     if best_match and best_dist <= 8:
                         matched_file = best_match
 
             if not matched_file or matched_file in matched_local_files:
                 continue
 
-            # Read sidecar
             sidecar_path = find_takeout_sidecar(t_img, dir_json_map, json_title_map)
             if not sidecar_path:
                 continue
@@ -354,7 +369,6 @@ def load_takeout_metadata(takeout_dir, local_photos):
             with open(sidecar_path, "r", encoding="utf-8", errors="ignore") as jf:
                 sdata = json.load(jf)
 
-            # Date from timestamp
             ts_str = sdata.get("photoTakenTime", {}).get("timestamp")
             t_date = None
             if ts_str:
@@ -366,7 +380,6 @@ def load_takeout_metadata(takeout_dir, local_photos):
                 except Exception:
                     pass
 
-            # Geo
             t_geo = None
             geo_obj = sdata.get("geoData") or sdata.get("geoDataExif") or {}
             lat = float(geo_obj.get("latitude", 0.0))
@@ -386,7 +399,257 @@ def load_takeout_metadata(takeout_dir, local_photos):
     return takeout_matches
 
 
-def sync_photos(takeout_dir=None):
+# ==================== VISUAL TAGGING ====================
+
+def prepare_image_for_api(image_path):
+    """Downscale photo to max 768px JPEG and return base64 encoded string."""
+    with Image.open(image_path) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        w, h = img.size
+        max_dim = max(w, h)
+        if max_dim > 768:
+            scale = 768.0 / max_dim
+            img = img.resize((round(w * scale), round(h * scale)), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def validate_and_clean_tags(raw):
+    """Validate raw LLM JSON response against fixed vocabulary and clean fields."""
+    if not isinstance(raw, dict):
+        return None
+
+    # scene
+    scene = raw.get("scene")
+    if scene not in SCENES:
+        scene = "other"
+
+    # subjects
+    raw_subjects = raw.get("subjects") or []
+    if isinstance(raw_subjects, str):
+        raw_subjects = [raw_subjects]
+    subjects = [s for s in raw_subjects if s in SUBJECTS]
+
+    # people_count
+    pc = str(raw.get("people_count", "0"))
+    if pc not in PEOPLE_COUNTS:
+        if pc in ("3", "4", "5"):
+            pc = "3-5"
+        elif pc.isdigit() and int(pc) >= 6:
+            pc = "6+"
+        else:
+            pc = "0"
+
+    # mood
+    mood = raw.get("mood")
+    if mood not in MOODS:
+        mood = "calm"
+
+    # time_of_day
+    tod = raw.get("time_of_day")
+    if tod not in TIMES_OF_DAY:
+        tod = "indoor-unknown"
+
+    # is_bw
+    is_bw = bool(raw.get("is_bw", False))
+
+    # event_hint
+    event_hint = raw.get("event_hint")
+    if event_hint not in EVENT_HINTS:
+        event_hint = "everyday"
+
+    # caption (max 12 words)
+    caption_raw = str(raw.get("caption") or "")
+    caption_words = caption_raw.strip().split()
+    caption = " ".join(caption_words[:12]) if caption_words else None
+
+    return {
+        "scene": scene,
+        "subjects": subjects,
+        "people_count": pc,
+        "mood": mood,
+        "time_of_day": tod,
+        "is_bw": is_bw,
+        "event_hint": event_hint,
+        "caption": caption,
+    }
+
+
+def tag_image_with_claude(image_path, api_key, model):
+    """Call Claude API to tag an image with fixed vocabulary and retry on 429/5xx."""
+    b64_img = prepare_image_for_api(image_path)
+    prompt_text = (
+        "Analyze this photo and provide visual tags in strict JSON format.\n"
+        "You must choose field values ONLY from these allowed lists:\n"
+        f'- "scene": one of {json.dumps(SCENES)}\n'
+        f'- "subjects": array containing any of {json.dumps(SUBJECTS)}\n'
+        f'- "people_count": one of {json.dumps(PEOPLE_COUNTS)}\n'
+        f'- "mood": one of {json.dumps(MOODS)}\n'
+        f'- "time_of_day": one of {json.dumps(TIMES_OF_DAY)}\n'
+        f'- "is_bw": boolean (true if black & white or monochrome, false otherwise)\n'
+        f'- "event_hint": one of {json.dumps(EVENT_HINTS)}\n'
+        '- "caption": short descriptive caption (maximum 12 words)\n\n'
+        "Respond with ONLY valid JSON adhering to this exact schema, with no markdown code blocks or preamble:\n"
+        "{\n"
+        '  "scene": "...",\n'
+        '  "subjects": [...],\n'
+        '  "people_count": "...",\n'
+        '  "mood": "...",\n'
+        '  "time_of_day": "...",\n'
+        '  "is_bw": false,\n'
+        '  "event_hint": "...",\n'
+        '  "caption": "..."\n'
+        "}"
+    )
+
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "max_tokens": 300,
+        "temperature": 0.0,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": b64_img,
+                        },
+                    },
+                    {"type": "text", "text": prompt_text},
+                ],
+            }
+        ],
+    }
+
+    retries = 5
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp_body = resp.read().decode("utf-8")
+                data = json.loads(resp_body)
+                text = ""
+                for item in data.get("content", []):
+                    if item.get("type") == "text":
+                        text += item.get("text", "")
+                text = text.strip()
+                if text.startswith("```"):
+                    text = re.sub(r"^```(?:json)?\s*", "", text)
+                    text = re.sub(r"\s*```$", "", text)
+                parsed = json.loads(text.strip())
+                return validate_and_clean_tags(parsed)
+        except urllib.error.HTTPError as e:
+            status_code = e.code
+            if status_code == 429 or status_code >= 500:
+                retry_after = e.headers.get("retry-after")
+                wait_time = float(retry_after) if retry_after else (2 ** attempt + random.uniform(0.1, 0.5))
+                time.sleep(wait_time)
+                continue
+            else:
+                error_body = e.read().decode("utf-8", errors="ignore")
+                print(f"API Error {status_code} on {image_path}: {error_body}", file=sys.stderr)
+                return None
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt + random.uniform(0.1, 0.5))
+                continue
+            print(f"Failed to tag {image_path}: {e}", file=sys.stderr)
+            return None
+
+    return None
+
+
+def run_visual_tagging(unique_filenames, retag=False):
+    """Run visual tagging for photos, caching in photos/.tags-cache.json."""
+    cache = {}
+    if os.path.isfile(TAGS_CACHE_PATH) and not retag:
+        try:
+            with open(TAGS_CACHE_PATH, "r", encoding="utf-8") as f:
+                cache = json.load(f)
+        except Exception:
+            cache = {}
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    model = (
+        os.environ.get("ANTHROPIC_MODEL")
+        or os.environ.get("CLAUDE_MODEL")
+        or "claude-3-5-haiku-20241022"
+    )
+
+    # Determine which photos need tagging
+    needed = []
+    for fn in unique_filenames:
+        chash = os.path.splitext(fn)[0]
+        if retag or chash not in cache:
+            needed.append(fn)
+
+    if not needed:
+        print(f"All {len(unique_filenames)} photos already tagged in cache.")
+        return cache
+
+    if not api_key:
+        if cache:
+            print(
+                f"Warning: ANTHROPIC_API_KEY not set. Using {len(cache)} cached tags; "
+                f"{len(needed)} photos remain untagged."
+            )
+        else:
+            print(
+                "Warning: ANTHROPIC_API_KEY not set. Skipping visual tagging "
+                "(pairing will use date, color, and duplicates)."
+            )
+        return cache
+
+    print(f"Tagging {len(needed)} photos with Claude API ({model}, concurrency 4)...")
+    completed = 0
+
+    def _worker(fn):
+        chash = os.path.splitext(fn)[0]
+        fpath = os.path.join(PHOTOS_DIR, fn)
+        tags = tag_image_with_claude(fpath, api_key, model)
+        return chash, tags
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(_worker, fn): fn for fn in needed}
+        for future in concurrent.futures.as_completed(futures):
+            fn = futures[future]
+            try:
+                chash, tags = future.result()
+                if tags:
+                    cache[chash] = tags
+                    completed += 1
+                    if completed % 10 == 0 or completed == len(needed):
+                        print(f"  Tagged {completed}/{len(needed)} photos...")
+            except Exception as e:
+                print(f"  Error tagging {fn}: {e}", file=sys.stderr)
+
+    # Save cache
+    with open(TAGS_CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2)
+        f.write("\n")
+    print(f"Saved {len(cache)} tagged photos to {TAGS_CACHE_PATH}.")
+
+    return cache
+
+
+def sync_photos(takeout_dir=None, retag=False):
     if not os.path.isdir(PHOTOS_DIR):
         print(f"Error: Photos directory not found at {PHOTOS_DIR}", file=sys.stderr)
         sys.exit(1)
@@ -413,7 +676,6 @@ def sync_photos(takeout_dir=None):
 
         if old_path != new_path:
             if os.path.exists(new_path):
-                # Target already exists (e.g. duplicate content), remove duplicate
                 os.remove(old_path)
             else:
                 os.rename(old_path, new_path)
@@ -441,7 +703,10 @@ def sync_photos(takeout_dir=None):
     if takeout_dir:
         takeout_data = load_takeout_metadata(takeout_dir, local_photos)
 
-    # 5. Extract date and geo per photo
+    # 5. Visual tagging
+    tags_cache = run_visual_tagging(unique_filenames, retag=retag)
+
+    # 6. Extract date, geo, and tags per photo
     date_counts = {"Takeout": 0, "EXIF DateTimeOriginal": 0, "EXIF DateTime": 0, "None": 0}
     geo_counts = {"Takeout": 0, "EXIF GPS": 0, "None": 0}
 
@@ -449,6 +714,7 @@ def sync_photos(takeout_dir=None):
     for p in local_photos:
         filename = p["f"]
         filepath = os.path.join(PHOTOS_DIR, filename)
+        chash = os.path.splitext(filename)[0]
 
         # Parse local EXIF
         exif_date, exif_date_src, exif_geo, exif_geo_src = parse_exif_metadata(filepath)
@@ -480,26 +746,36 @@ def sync_photos(takeout_dir=None):
         else:
             geo_counts["None"] += 1
 
+        # Tag data
+        tag_entry = tags_cache.get(chash)
+        tags_obj = None
+        caption_val = None
+        if tag_entry:
+            tags_obj = {k: v for k, v in tag_entry.items() if k != "caption"}
+            caption_val = tag_entry.get("caption")
+
         entry = {
             "f": filename,
             "w": p["w"],
             "h": p["h"],
             "date": final_date,
             "geo": final_geo,
+            "tags": tags_obj,
+            "caption": caption_val,
         }
         manifest.append(entry)
 
     # Sort manifest deterministically by filename
     manifest.sort(key=lambda item: item["f"])
 
-    # 6. Write photos.json
+    # 7. Write photos.json
     with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
 
     print(f"\nWrote {len(manifest)} photos to {MANIFEST_PATH}.")
 
-    # 7. Print date and location summary
+    # 8. Print date and location summary
     total = len(manifest)
     total_with_date = total - date_counts["None"]
     total_with_geo = total - geo_counts["None"]
@@ -518,7 +794,7 @@ def sync_photos(takeout_dir=None):
             print(f"    - {src}: {count}")
     print(f"    - No geo: {geo_counts['None']}")
 
-    # 8. Report low-resolution images
+    # 9. Report low-resolution images
     print(f"\n{len(under_1080)} images have longest edge under 1080px (originals can be swapped):")
     for fname, w, h in sorted(under_1080, key=lambda x: max(x[1], x[2])):
         print(f"  {fname}: {w}×{h} (longest: {max(w, h)}px)")
@@ -527,9 +803,10 @@ def sync_photos(takeout_dir=None):
 def main():
     parser = argparse.ArgumentParser(description="Sync photos for the display kiosk.")
     parser.add_argument("--takeout", type=str, default=None, help="Path to Google Takeout album directory")
+    parser.add_argument("--retag", action="store_true", help="Force redo of visual tagging with Claude API")
     args = parser.parse_args()
 
-    sync_photos(takeout_dir=args.takeout)
+    sync_photos(takeout_dir=args.takeout, retag=args.retag)
 
 
 if __name__ == "__main__":
