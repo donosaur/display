@@ -4,8 +4,9 @@
 Renames every image in photos/ to a content hash (first 10 hex characters of sha1 + extension),
 reads dimensions honoring EXIF orientation, extracts capture date and geo location
 (supporting Google Takeout exports and EXIF metadata fallback), tags photos visually
-using the Claude API with a fixed vocabulary, writes photos/photos.json,
-and reports images whose longest edge is under 1080px.
+using the Claude API with a fixed vocabulary, computes local image features (luma,
+saturation, warmth, palette, phash), writes photos/photos.json, and reports images
+whose longest edge is under 1080px.
 """
 
 import argparse
@@ -193,6 +194,82 @@ def hamming_distance(h1, h2):
     if not h1 or not h2:
         return 64
     return bin(int(h1, 16) ^ int(h2, 16)).count("1")
+
+
+def compute_local_features(image_path):
+    """Compute local image features (no API, Pillow + numpy):
+    
+    - luma: mean brightness (0-1)
+    - sat: mean saturation (0-1)
+    - warmth: mean of (R - B) / 255 (-1..1)
+    - palette: 3 dominant colors via k-means on 64px thumbnail as hex
+    - phash: 64-bit perceptual hash (16-char hex)
+    """
+    phash = compute_phash(image_path)
+
+    with Image.open(image_path) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # 64x64 thumbnail for fast feature calculation
+        thumb = img.resize((64, 64), Image.Resampling.BILINEAR)
+        pixels = np.asarray(thumb, dtype=np.float64)
+
+        r = pixels[:, :, 0]
+        g = pixels[:, :, 1]
+        b = pixels[:, :, 2]
+
+        # luma: mean brightness (0-1)
+        luma = float(np.mean(0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0)
+
+        # sat: mean saturation (0-1)
+        cmax = np.max(pixels, axis=-1)
+        cmin = np.min(pixels, axis=-1)
+        delta = cmax - cmin
+        sat_arr = np.zeros_like(cmax)
+        mask = cmax > 0
+        sat_arr[mask] = delta[mask] / cmax[mask]
+        sat = float(np.mean(sat_arr))
+
+        # warmth: mean of R minus B normalized to -1..1
+        warmth = float(np.mean(r - b) / 255.0)
+
+        # palette: 3 dominant colors via small k-means
+        flat_pixels = pixels.reshape(-1, 3)
+        lum_flat = 0.2126 * flat_pixels[:, 0] + 0.7152 * flat_pixels[:, 1] + 0.0722 * flat_pixels[:, 2]
+        sorted_idx = np.argsort(lum_flat)
+        centers = flat_pixels[sorted_idx[[len(sorted_idx) // 6, len(sorted_idx) // 2, 5 * len(sorted_idx) // 6]]].copy()
+
+        labels = np.zeros(len(flat_pixels), dtype=int)
+        for _ in range(12):
+            dists = np.sum((flat_pixels[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+            labels = np.argmin(dists, axis=1)
+            new_centers = np.empty_like(centers)
+            for k in range(3):
+                cluster_pts = flat_pixels[labels == k]
+                if len(cluster_pts) > 0:
+                    new_centers[k] = np.mean(cluster_pts, axis=0)
+                else:
+                    new_centers[k] = centers[k]
+            if np.allclose(centers, new_centers, atol=0.5):
+                break
+            centers = new_centers
+
+        counts = [np.sum(labels == k) for k in range(3)]
+        sorted_order = np.argsort(counts)[::-1]
+        palette = [
+            f"#{int(np.clip(round(centers[k][0]), 0, 255)):02x}{int(np.clip(round(centers[k][1]), 0, 255)):02x}{int(np.clip(round(centers[k][2]), 0, 255)):02x}"
+            for k in sorted_order
+        ]
+
+    return {
+        "luma": round(luma, 3),
+        "sat": round(sat, 3),
+        "warmth": round(warmth, 3),
+        "palette": palette,
+        "phash": phash,
+    }
 
 
 def parse_exif_metadata(path):
@@ -593,7 +670,6 @@ def run_visual_tagging(unique_filenames, retag=False):
         or "claude-3-5-haiku-20241022"
     )
 
-    # Determine which photos need tagging
     needed = []
     for fn in unique_filenames:
         chash = os.path.splitext(fn)[0]
@@ -640,7 +716,6 @@ def run_visual_tagging(unique_filenames, retag=False):
             except Exception as e:
                 print(f"  Error tagging {fn}: {e}", file=sys.stderr)
 
-    # Save cache
     with open(TAGS_CACHE_PATH, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)
         f.write("\n")
@@ -706,10 +781,11 @@ def sync_photos(takeout_dir=None, retag=False):
     # 5. Visual tagging
     tags_cache = run_visual_tagging(unique_filenames, retag=retag)
 
-    # 6. Extract date, geo, and tags per photo
+    # 6. Extract date, geo, tags, and local image features
     date_counts = {"Takeout": 0, "EXIF DateTimeOriginal": 0, "EXIF DateTime": 0, "None": 0}
     geo_counts = {"Takeout": 0, "EXIF GPS": 0, "None": 0}
 
+    print(f"Computing local image features (luma, sat, warmth, palette, phash) for {len(local_photos)} photos...")
     manifest = []
     for p in local_photos:
         filename = p["f"]
@@ -754,6 +830,9 @@ def sync_photos(takeout_dir=None, retag=False):
             tags_obj = {k: v for k, v in tag_entry.items() if k != "caption"}
             caption_val = tag_entry.get("caption")
 
+        # Local features (no API: luma, sat, warmth, palette, phash)
+        features = compute_local_features(filepath)
+
         entry = {
             "f": filename,
             "w": p["w"],
@@ -762,6 +841,11 @@ def sync_photos(takeout_dir=None, retag=False):
             "geo": final_geo,
             "tags": tags_obj,
             "caption": caption_val,
+            "luma": features["luma"],
+            "sat": features["sat"],
+            "warmth": features["warmth"],
+            "palette": features["palette"],
+            "phash": features["phash"],
         }
         manifest.append(entry)
 
