@@ -61,9 +61,12 @@
   }
   #fsbtn.hide { display: none; }
   #tapstart {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 10;
+    position: fixed; bottom: 1.5vh; right: 2vw; z-index: 10;
+    font-size: 1.5vh; color: rgba(255, 255, 255, 0.65); background: rgba(20, 20, 22, 0.7);
+    border: 1px solid #2a2a30; border-radius: 1vh;
+    padding: 0.8vh 1.8vh; cursor: pointer;
     display: none; align-items: center; justify-content: center;
-    font-size: 3vh; color: #d4d4d8; cursor: pointer;
+    font-family: inherit;
   }
   #tapstart.show { display: flex; }
   #status-note {
@@ -89,7 +92,7 @@
 <div id="slide-a" class="slide"></div>
 <div id="slide-b" class="slide"></div>
 <button id="fsbtn" type="button">&#x26F6; fullscreen</button>
-<div id="tapstart">tap anywhere to start</div>
+<div id="tapstart">tap to keep awake</div>
 <div id="status-note">couldn't load photos, retrying</div>
 
 <audio id="akeep" loop muted playsinline preload="auto"
@@ -926,6 +929,7 @@
 
   /* ---------- 4) fullscreen ---------- */
   var fsBtn = document.getElementById('fsbtn');
+  var fsHideTimer = null;
   function isFullscreen() {
     return !!(document.fullscreenElement || document.webkitFullscreenElement);
   }
@@ -943,11 +947,39 @@
       if (p && p.catch) p.catch(function(){});
     } catch (e) {}
   }
-  function renderFsBtn() { fsBtn.classList.toggle('hide', isFullscreen()); }
+  function showFsBtnTemp(ms) {
+    if (isFullscreen()) {
+      hideFsBtn();
+      return;
+    }
+    fsBtn.classList.remove('hide');
+    if (fsHideTimer) clearTimeout(fsHideTimer);
+    fsHideTimer = setTimeout(function () {
+      fsBtn.classList.add('hide');
+    }, ms || 10000);
+  }
+  function hideFsBtn() {
+    if (fsHideTimer) { clearTimeout(fsHideTimer); fsHideTimer = null; }
+    fsBtn.classList.add('hide');
+  }
+  function renderFsBtn() {
+    if (isFullscreen()) {
+      hideFsBtn();
+    } else {
+      showFsBtnTemp(10000);
+    }
+  }
   document.addEventListener('fullscreenchange', renderFsBtn);
   document.addEventListener('webkitfullscreenchange', renderFsBtn);
-  fsBtn.addEventListener('click', function (e) { e.stopPropagation(); goFullscreen(); });
-  fsBtn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+  fsBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    arm();
+    goFullscreen();
+  });
+  fsBtn.addEventListener('pointerup', function (e) {
+    e.stopPropagation();
+    arm();
+  });
   renderFsBtn();
 
   /* ---------- visibility: re-arm everything ---------- */
@@ -960,13 +992,20 @@
   function showTapStart() { tapEl.classList.add('show'); }
   function hideTapStart() { tapEl.classList.remove('show'); }
   function arm() {
-    hideTapStart(); requestLock(); keepAudio(); goFullscreen();
+    hideTapStart();
+    hideFsBtn();
+    requestLock();
+    keepAudio();
+    goFullscreen();
     armed = true;
   }
   document.addEventListener('pointerup', function (e) {
-    if (e.target && (e.target.id === 'fsbtn' || (e.target.closest && e.target.closest('#fsbtn')))) {
-      return;
+    var isFsTarget = e.target && (e.target.id === 'fsbtn' || (e.target.closest && e.target.closest('#fsbtn')));
+    if (!isFsTarget && !isFullscreen()) {
+      showFsBtnTemp(10000);
     }
+    if (isFsTarget) return;
+
     if (!armed) {
       arm();
       return;
