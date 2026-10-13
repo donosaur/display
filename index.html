@@ -209,11 +209,16 @@
     return (lossFull - lossHalf) >= 0.15;
   }
 
-  function createDebugBadge(photo, va) {
+  function createDebugBadge(photo, va, pairScore) {
     if (!DEBUG || !photo) return null;
     var badge = document.createElement('div');
     badge.className = 'debug-badge';
-    var text = photo.f || photo.src || '';
+    var lines = [];
+    var title = photo.f || photo.src || '';
+    if (photo.w && photo.h) {
+      title += ' (' + photo.w + '×' + photo.h + ')';
+    }
+    lines.push(title);
     if (photo.w && photo.h) {
       var ia = photo.w / photo.h;
       var caFull = va;
@@ -221,10 +226,32 @@
       var lossFull = cropLoss(ia, caFull);
       var lossHalf = cropLoss(ia, caHalf);
       var diff = lossFull - lossHalf;
-      text += ' (' + photo.w + '×' + photo.h + ')\n';
-      text += 'loss full: ' + lossFull.toFixed(3) + ' | half: ' + lossHalf.toFixed(3) + ' (Δ ' + diff.toFixed(3) + ')';
+      lines.push('loss full: ' + lossFull.toFixed(3) + ' | half: ' + lossHalf.toFixed(3) + ' (Δ ' + diff.toFixed(3) + ')');
     }
-    badge.textContent = text;
+    if (pairScore !== undefined && pairScore !== null) {
+      lines.push('pair score: ' + Number(pairScore).toFixed(3));
+    }
+    if (photo.date) {
+      lines.push('date: ' + photo.date);
+    } else {
+      lines.push('date: none');
+    }
+    if (photo.caption) {
+      lines.push('caption: "' + photo.caption + '"');
+    }
+    if (photo.tags) {
+      var t = photo.tags;
+      var tagParts = [];
+      if (t.scene) tagParts.push(t.scene);
+      if (t.event_hint && t.event_hint !== 'everyday') tagParts.push(t.event_hint);
+      if (t.mood) tagParts.push(t.mood);
+      if (t.subjects && t.subjects.length) tagParts.push(t.subjects.join(', '));
+      if (t.is_bw) tagParts.push('b&w');
+      if (tagParts.length) {
+        lines.push('tags: ' + tagParts.join(' · '));
+      }
+    }
+    badge.textContent = lines.join('\n');
     return badge;
   }
 
@@ -407,7 +434,7 @@
         cell.className = 'cell cover';
         cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[i]) + '")';
         if (DEBUG) {
-          var b = createDebugBadge(slide.photos[i], va);
+          var b = createDebugBadge(slide.photos[i], va, slide.score);
           if (b) cell.appendChild(b);
         }
         container.appendChild(cell);

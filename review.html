@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Review — Display Kiosk</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --border-subtle: #f5f5f4;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --text-faint: #a8a29e;
+    --accent: #c2410c;
+    --accent-bg: #fff7ed;
+    --tag-bg: #f5f5f4;
+    --score-high-bg: #fef3c7;
+    --score-high-text: #92400e;
+    --score-high-border: #fde68a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    line-height: 1.45;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* Top sticky control bar */
+  header.bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(247, 246, 243, 0.94);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .brand-group {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .stats {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  select, input[type="search"] {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  select:focus, input[type="search"]:focus {
+    border-color: var(--text);
+  }
+
+  .toggle-btn {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+
+  .toggle-btn:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  .toggle-btn.active {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-color: #fdba74;
+    font-weight: 500;
+  }
+
+  /* Grid of photos */
+  main {
+    padding: 24px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+    gap: 20px;
+  }
+
+  /* Photo Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s ease;
+  }
+
+  .card:hover {
+    border-color: #d6d3d1;
+  }
+
+  .card-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    background: #fafaf9;
+  }
+
+  .card-filename {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .card-filename:hover {
+    text-decoration: underline;
+  }
+
+  .card-dims {
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+  }
+
+  .card-body {
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 16px;
+    flex: 1;
+  }
+
+  .photo-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .thumb-wrap {
+    position: relative;
+    width: 140px;
+    height: 180px;
+    background: #e7e5e4;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .thumb-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .palette-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 2px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.06);
+  }
+
+  .palette-swatch {
+    flex: 1;
+  }
+
+  .meta-stats {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    line-height: 1.3;
+  }
+
+  .info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .date-badge {
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .no-date {
+    color: #dc2626;
+    background: #fef2f2;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    display: inline-block;
+  }
+
+  .geo-badge {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .caption {
+    font-size: 13px;
+    color: var(--text);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .no-caption {
+    font-size: 12px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  .tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tag {
+    font-size: 11px;
+    background: var(--tag-bg);
+    color: #44403c;
+    border: 1px solid #e7e5e4;
+    border-radius: 3px;
+    padding: 2px 6px;
+    line-height: 1.2;
+  }
+
+  .tag.scene {
+    background: #f0fdf4;
+    color: #166534;
+    border-color: #bbf7d0;
+  }
+
+  .tag.event {
+    background: #eff6ff;
+    color: #1e40af;
+    border-color: #bfdbfe;
+  }
+
+  .tag.bw {
+    background: #18181b;
+    color: #fafafa;
+    border-color: #18181b;
+  }
+
+  /* Partners Section */
+  .partners-section {
+    margin-top: auto;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 10px;
+  }
+
+  .partners-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+
+  .partners-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .partner-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: #fafaf9;
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .partner-row:hover {
+    background: #f5f5f4;
+    border-color: var(--border);
+  }
+
+  .partner-thumb {
+    width: 38px;
+    height: 38px;
+    border-radius: 3px;
+    object-fit: cover;
+    background: #e7e5e4;
+    flex-shrink: 0;
+  }
+
+  .partner-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .partner-fn {
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .partner-date {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .score-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--tag-bg);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .score-badge.high {
+    background: var(--score-high-bg);
+    color: var(--score-high-text);
+    border-color: var(--score-high-border);
+  }
+
+  .no-partners {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  .empty-state {
+    padding: 80px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 15px;
+  }
+
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .card-body { grid-template-columns: 1fr; }
+    .thumb-wrap { width: 100%; height: 220px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand-group">
+    <h1>Photo Review</h1>
+    <div id="stats" class="stats">Loading...</div>
+  </div>
+
+  <div class="controls">
+    <select id="filter-tag">
+      <option value="">All Tags</option>
+      <optgroup label="Scenes" id="optgroup-scenes"></optgroup>
+      <optgroup label="Subjects" id="optgroup-subjects"></optgroup>
+      <optgroup label="Events" id="optgroup-events"></optgroup>
+      <optgroup label="Moods" id="optgroup-moods"></optgroup>
+      <optgroup label="Other">
+        <option value="is_bw:true">Black &amp; White</option>
+      </optgroup>
+    </select>
+
+    <button id="toggle-nodate" class="toggle-btn" type="button">No Date</button>
+    <button id="toggle-haspartners" class="toggle-btn" type="button">Has Partners</button>
+
+    <input type="search" id="search-input" placeholder="Search caption or filename...">
+
+    <select id="sort-select">
+      <option value="default">Default Order</option>
+      <option value="date-desc">Newest Date</option>
+      <option value="date-asc">Oldest Date</option>
+      <option value="partners-desc">Most Partners</option>
+      <option value="score-desc">Highest Top Score</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty-state" style="display: none;">No photos match the selected filters.</div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var allPhotos = [];
+  var photoMap = {};
+
+  var SCENES = [
+    "indoor-home", "indoor-venue", "restaurant", "street-city", "park-garden",
+    "beach-water", "mountains-nature", "travel-landmark", "stage-performance",
+    "event-party", "vehicle-transit", "other"
+  ];
+  var SUBJECTS = [
+    "people-group", "person-solo", "couple", "child", "baby", "cat", "dog",
+    "food-drink", "architecture", "landscape", "art-object", "text-screenshot"
+  ];
+  var EVENTS = ["birthday", "wedding", "holiday", "concert-performance", "trip", "meal"];
+  var MOODS = ["calm", "joyful", "energetic", "formal", "moody"];
+
+  function populateFilterOptions() {
+    var scenesGroup = document.getElementById('optgroup-scenes');
+    SCENES.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = 'scene:' + s;
+      opt.textContent = s;
+      scenesGroup.appendChild(opt);
+    });
+
+    var subjectsGroup = document.getElementById('optgroup-subjects');
+    SUBJECTS.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = 'subject:' + s;
+      opt.textContent = s;
+      subjectsGroup.appendChild(opt);
+    });
+
+    var eventsGroup = document.getElementById('optgroup-events');
+    EVENTS.forEach(function (e) {
+      var opt = document.createElement('option');
+      opt.value = 'event:' + e;
+      opt.textContent = e;
+      eventsGroup.appendChild(opt);
+    });
+
+    var moodsGroup = document.getElementById('optgroup-moods');
+    MOODS.forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = 'mood:' + m;
+      opt.textContent = m;
+      moodsGroup.appendChild(opt);
+    });
+  }
+
+  populateFilterOptions();
+
+  var filterTagEl = document.getElementById('filter-tag');
+  var toggleNoDateBtn = document.getElementById('toggle-nodate');
+  var toggleHasPartnersBtn = document.getElementById('toggle-haspartners');
+  var searchInput = document.getElementById('search-input');
+  var sortSelect = document.getElementById('sort-select');
+  var statsEl = document.getElementById('stats');
+  var gridEl = document.getElementById('grid');
+  var emptyEl = document.getElementById('empty');
+
+  var filterNoDate = false;
+  var filterHasPartners = false;
+
+  toggleNoDateBtn.addEventListener('click', function () {
+    filterNoDate = !filterNoDate;
+    toggleNoDateBtn.classList.toggle('active', filterNoDate);
+    applyFilters();
+  });
+
+  toggleHasPartnersBtn.addEventListener('click', function () {
+    filterHasPartners = !filterHasPartners;
+    toggleHasPartnersBtn.classList.toggle('active', filterHasPartners);
+    applyFilters();
+  });
+
+  filterTagEl.addEventListener('change', applyFilters);
+  searchInput.addEventListener('input', applyFilters);
+  sortSelect.addEventListener('change', applyFilters);
+
+  function matchesTag(photo, tagFilter) {
+    if (!tagFilter) return true;
+    if (tagFilter === 'is_bw:true') {
+      return photo.tags && photo.tags.is_bw;
+    }
+    var parts = tagFilter.split(':');
+    var type = parts[0];
+    var val = parts[1];
+    if (!photo.tags) return false;
+    if (type === 'scene') return photo.tags.scene === val;
+    if (type === 'event') return photo.tags.event_hint === val;
+    if (type === 'mood') return photo.tags.mood === val;
+    if (type === 'subject') {
+      return photo.tags.subjects && photo.tags.subjects.indexOf(val) !== -1;
+    }
+    return false;
+  }
+
+  function applyFilters() {
+    var tagVal = filterTagEl.value;
+    var query = searchInput.value.trim().toLowerCase();
+    var sortVal = sortSelect.value;
+
+    var filtered = allPhotos.filter(function (p) {
+      if (filterNoDate && p.date) return false;
+      if (filterHasPartners && (!p.partners || p.partners.length === 0)) return false;
+      if (!matchesTag(p, tagVal)) return false;
+      if (query) {
+        var matchFn = p.f && p.f.toLowerCase().indexOf(query) !== -1;
+        var matchCap = p.caption && p.caption.toLowerCase().indexOf(query) !== -1;
+        if (!matchFn && !matchCap) return false;
+      }
+      return true;
+    });
+
+    // Sorting
+    filtered.sort(function (a, b) {
+      if (sortVal === 'date-desc') {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return b.date.localeCompare(a.date);
+      }
+      if (sortVal === 'date-asc') {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date.localeCompare(b.date);
+      }
+      if (sortVal === 'partners-desc') {
+        var aLen = a.partners ? a.partners.length : 0;
+        var bLen = b.partners ? b.partners.length : 0;
+        return bLen - aLen;
+      }
+      if (sortVal === 'score-desc') {
+        var aTop = (a.partners && a.partners[0]) ? a.partners[0][1] : 0;
+        var bTop = (b.partners && b.partners[0]) ? b.partners[0][1] : 0;
+        return bTop - aTop;
+      }
+      return a.f.localeCompare(b.f);
+    });
+
+    renderGrid(filtered);
+    updateStats(filtered.length);
+  }
+
+  function updateStats(showingCount) {
+    var total = allPhotos.length;
+    var dated = allPhotos.filter(function (p) { return !!p.date; }).length;
+    var withPartners = allPhotos.filter(function (p) { return p.partners && p.partners.length > 0; }).length;
+    statsEl.textContent = showingCount + ' / ' + total + ' photos (' + dated + ' dated · ' + withPartners + ' with partners)';
+  }
+
+  function renderGrid(photos) {
+    gridEl.innerHTML = '';
+    if (!photos.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    var fragment = document.createDocumentFragment();
+
+    for (var i = 0; i < photos.length; i++) {
+      var p = photos[i];
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.id = 'photo-' + p.f.replace('.', '-');
+
+      // Card Header
+      var header = document.createElement('div');
+      header.className = 'card-header';
+      var fnLink = document.createElement('a');
+      fnLink.className = 'card-filename';
+      fnLink.href = 'photos/' + p.f;
+      fnLink.target = '_blank';
+      fnLink.textContent = p.f;
+      var dimsSpan = document.createElement('span');
+      dimsSpan.className = 'card-dims';
+      dimsSpan.textContent = p.w + '×' + p.h;
+      header.appendChild(fnLink);
+      header.appendChild(dimsSpan);
+      card.appendChild(header);
+
+      // Card Body
+      var body = document.createElement('div');
+      body.className = 'card-body';
+
+      // Left Column: Photo Preview & Palette
+      var photoCol = document.createElement('div');
+      photoCol.className = 'photo-col';
+      var thumbWrap = document.createElement('div');
+      thumbWrap.className = 'thumb-wrap';
+      var img = document.createElement('img');
+      img.src = 'photos/' + p.f;
+      img.loading = 'lazy';
+      img.alt = p.f;
+      thumbWrap.appendChild(img);
+      photoCol.appendChild(thumbWrap);
+
+      // Palette bar
+      if (p.palette && p.palette.length) {
+        var palBar = document.createElement('div');
+        palBar.className = 'palette-bar';
+        p.palette.forEach(function (color) {
+          var swatch = document.createElement('div');
+          swatch.className = 'palette-swatch';
+          swatch.style.backgroundColor = color;
+          swatch.title = color;
+          palBar.appendChild(swatch);
+        });
+        photoCol.appendChild(palBar);
+      }
+
+      // Local features metrics
+      var metaStats = document.createElement('div');
+      metaStats.className = 'meta-stats';
+      metaStats.textContent = 'lum: ' + (p.luma !== undefined ? p.luma : '-') + ' · sat: ' + (p.sat !== undefined ? p.sat : '-') + ' · wrm: ' + (p.warmth !== undefined ? p.warmth : '-');
+      photoCol.appendChild(metaStats);
+
+      body.appendChild(photoCol);
+
+      // Right Column: Info & Partners
+      var infoCol = document.createElement('div');
+      infoCol.className = 'info-col';
+
+      // Date / Geo
+      var dateRow = document.createElement('div');
+      dateRow.className = 'date-badge';
+      if (p.date) {
+        dateRow.textContent = '📅 ' + p.date.replace('T', ' ');
+      } else {
+        dateRow.innerHTML = '<span class="no-date">No capture date</span>';
+      }
+      if (p.geo) {
+        var geoSpan = document.createElement('span');
+        geoSpan.className = 'geo-badge';
+        geoSpan.textContent = '📍 ' + p.geo[0] + ', ' + p.geo[1];
+        dateRow.appendChild(geoSpan);
+      }
+      infoCol.appendChild(dateRow);
+
+      // Caption
+      var capEl = document.createElement('div');
+      if (p.caption) {
+        capEl.className = 'caption';
+        capEl.textContent = '“' + p.caption + '”';
+      } else {
+        capEl.className = 'no-caption';
+        capEl.textContent = 'No caption';
+      }
+      infoCol.appendChild(capEl);
+
+      // Tags
+      var tagsWrap = document.createElement('div');
+      tagsWrap.className = 'tags-list';
+      if (p.tags) {
+        var t = p.tags;
+        if (t.scene) {
+          var tagScene = document.createElement('span');
+          tagScene.className = 'tag scene';
+          tagScene.textContent = t.scene;
+          tagsWrap.appendChild(tagScene);
+        }
+        if (t.event_hint && t.event_hint !== 'everyday') {
+          var tagEvent = document.createElement('span');
+          tagEvent.className = 'tag event';
+          tagEvent.textContent = t.event_hint;
+          tagsWrap.appendChild(tagEvent);
+        }
+        if (t.mood) {
+          var tagMood = document.createElement('span');
+          tagMood.className = 'tag';
+          tagMood.textContent = t.mood;
+          tagsWrap.appendChild(tagMood);
+        }
+        if (t.is_bw) {
+          var tagBw = document.createElement('span');
+          tagBw.className = 'tag bw';
+          tagBw.textContent = 'b&w';
+          tagsWrap.appendChild(tagBw);
+        }
+        if (t.subjects && t.subjects.length) {
+          t.subjects.forEach(function (sub) {
+            var tagSub = document.createElement('span');
+            tagSub.className = 'tag';
+            tagSub.textContent = sub;
+            tagsWrap.appendChild(tagSub);
+          });
+        }
+      }
+      infoCol.appendChild(tagsWrap);
+
+      // Partners section (Top 3)
+      var partnersSec = document.createElement('div');
+      partnersSec.className = 'partners-section';
+      var partnersTitle = document.createElement('div');
+      partnersTitle.className = 'partners-title';
+      partnersTitle.textContent = 'Top Partners (' + ((p.partners && p.partners.length) || 0) + ')';
+      partnersSec.appendChild(partnersTitle);
+
+      var partners = p.partners || [];
+      if (partners.length > 0) {
+        var list = document.createElement('div');
+        list.className = 'partners-list';
+
+        var top3 = partners.slice(0, 3);
+        top3.forEach(function (partnerItem) {
+          var pfn = partnerItem[0];
+          var score = partnerItem[1];
+          var partnerObj = photoMap[pfn];
+
+          var row = document.createElement('a');
+          row.className = 'partner-row';
+          row.href = '#photo-' + pfn.replace('.', '-');
+
+          var pimg = document.createElement('img');
+          pimg.className = 'partner-thumb';
+          pimg.src = 'photos/' + pfn;
+          pimg.loading = 'lazy';
+          pimg.alt = pfn;
+          row.appendChild(pimg);
+
+          var details = document.createElement('div');
+          details.className = 'partner-details';
+          var fnDiv = document.createElement('div');
+          fnDiv.className = 'partner-fn';
+          fnDiv.textContent = pfn;
+          var dateDiv = document.createElement('div');
+          dateDiv.className = 'partner-date';
+          dateDiv.textContent = partnerObj && partnerObj.date ? partnerObj.date.slice(0, 10) : 'No date';
+          details.appendChild(fnDiv);
+          details.appendChild(dateDiv);
+          row.appendChild(details);
+
+          var scoreBadge = document.createElement('div');
+          scoreBadge.className = 'score-badge' + (score >= 0.5 ? ' high' : '');
+          scoreBadge.textContent = Number(score).toFixed(3);
+          row.appendChild(scoreBadge);
+
+          list.appendChild(row);
+        });
+
+        partnersSec.appendChild(list);
+      } else {
+        var noPart = document.createElement('div');
+        noPart.className = 'no-partners';
+        noPart.textContent = 'No partners (score < 0.2)';
+        partnersSec.appendChild(noPart);
+      }
+
+      infoCol.appendChild(partnersSec);
+      body.appendChild(infoCol);
+      card.appendChild(body);
+      fragment.appendChild(card);
+    }
+
+    gridEl.appendChild(fragment);
+  }
+
+  fetch('photos/photos.json')
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      allPhotos = data;
+      for (var i = 0; i < allPhotos.length; i++) {
+        photoMap[allPhotos[i].f] = allPhotos[i];
+      }
+      applyFilters();
+    })
+    .catch(function (err) {
+      statsEl.textContent = 'Failed to load photos.json: ' + err.message;
+    });
+
+})();
+</script>
+</body>
+</html>
