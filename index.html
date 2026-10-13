@@ -1018,6 +1018,14 @@
   keepAudio();
   goFullscreen();
   setTimeout(keepAudio, 1500);
+
+  /* ---------- service worker registration ---------- */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+
   /* ---------- expose kiosk state for diagnostics and testing ---------- */
   window.__kiosk = {
     getPhotos: function() { return photos; },

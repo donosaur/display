@@ -23,6 +23,11 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/photos/*.jpg"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
