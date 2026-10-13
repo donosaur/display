@@ -228,38 +228,163 @@
     return badge;
   }
 
-  function buildSlideQueue(list, va) {
-    var queue = [];
-    var isPair = [];
-    for (var i = 0; i < list.length; i++) {
-      isPair.push(isPairable(list[i], va));
+  function pickWeightedPartner(candidates) {
+    if (candidates.length === 1) return candidates[0];
+    var totalWeight = 0;
+    for (var i = 0; i < candidates.length; i++) {
+      totalWeight += Math.max(0.001, candidates[i][1]);
     }
-    var used = new Array(list.length).fill(false);
+    var r = Math.random() * totalWeight;
+    var cum = 0;
+    for (var i = 0; i < candidates.length; i++) {
+      cum += Math.max(0.001, candidates[i][1]);
+      if (r <= cum || i === candidates.length - 1) {
+        return candidates[i];
+      }
+    }
+    return candidates[0];
+  }
+
+  function getSlideDate(slide) {
+    if (!slide || !slide.photos) return null;
+    for (var k = 0; k < slide.photos.length; k++) {
+      if (slide.photos[k].date) return String(slide.photos[k].date).slice(0, 10);
+    }
+    return null;
+  }
+
+  function buildSlideQueue(list, va) {
+    if (!list || !list.length) return [];
+
+    var photoMap = {};
+    var isPairMap = {};
+    var nonPairable = [];
+    var pairable = [];
+
     for (var i = 0; i < list.length; i++) {
-      if (used[i]) continue;
-      var p1 = list[i];
-      if (!isPair[i]) {
-        queue.push({ type: 'single', photos: [p1] });
-        used[i] = true;
+      var p = list[i];
+      photoMap[p.f] = p;
+      if (isPairable(p, va)) {
+        isPairMap[p.f] = true;
+        pairable.push(p);
       } else {
-        var nextIdx = -1;
-        for (var j = i + 1; j < list.length; j++) {
-          if (!used[j] && isPair[j]) {
-            nextIdx = j;
-            break;
-          }
+        nonPairable.push(p);
+      }
+    }
+
+    if (SHUFFLE) {
+      shuffle(pairable);
+      shuffle(nonPairable);
+    }
+
+    var used = {};
+    var pairedSlides = [];
+
+    // Pass 1: For each unpaired photo, pick from top 3 unused pairable partners (score-weighted)
+    for (var i = 0; i < pairable.length; i++) {
+      var p1 = pairable[i];
+      if (used[p1.f]) continue;
+
+      var validCandidates = [];
+      var partners = p1.partners || [];
+      for (var k = 0; k < partners.length; k++) {
+        var candidateFn = partners[k][0];
+        var candidateScore = partners[k][1];
+        if (!used[candidateFn] && isPairMap[candidateFn] && candidateFn !== p1.f && candidateScore >= 0.2) {
+          validCandidates.push(partners[k]);
+          if (validCandidates.length >= 3) break;
         }
-        if (nextIdx !== -1) {
-          queue.push({ type: 'pair', photos: [p1, list[nextIdx]] });
-          used[i] = true;
-          used[nextIdx] = true;
-        } else {
-          queue.push({ type: 'leftover', photos: [p1] });
-          used[i] = true;
+      }
+
+      if (validCandidates.length > 0) {
+        var chosen = pickWeightedPartner(validCandidates);
+        var p2 = photoMap[chosen[0]];
+        if (p2) {
+          used[p1.f] = true;
+          used[p2.f] = true;
+          pairedSlides.push({ type: 'pair', photos: [p1, p2], score: chosen[1] });
         }
       }
     }
-    return queue;
+
+    // Pass 2: Pair leftovers with each other where score > 0
+    var leftovers = pairable.filter(function (p) { return !used[p.f]; });
+    for (var i = 0; i < leftovers.length; i++) {
+      var p1 = leftovers[i];
+      if (used[p1.f]) continue;
+
+      var bestPartner = null;
+      var bestScore = 0;
+      for (var j = i + 1; j < leftovers.length; j++) {
+        var p2 = leftovers[j];
+        if (used[p2.f]) continue;
+
+        var sc = 0;
+        var p1Partners = p1.partners || [];
+        for (var k = 0; k < p1Partners.length; k++) {
+          if (p1Partners[k][0] === p2.f) { sc = p1Partners[k][1]; break; }
+        }
+        if (sc === 0) {
+          var p2Partners = p2.partners || [];
+          for (var k = 0; k < p2Partners.length; k++) {
+            if (p2Partners[k][0] === p1.f) { sc = p2Partners[k][1]; break; }
+          }
+        }
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestPartner = p2;
+        }
+      }
+
+      if (bestPartner && bestScore > 0) {
+        used[p1.f] = true;
+        used[bestPartner.f] = true;
+        pairedSlides.push({ type: 'pair', photos: [p1, bestPartner], score: bestScore });
+      }
+    }
+
+    // Pass 3: Fall back to any remaining unused pairable photos
+    var remaining = pairable.filter(function (p) { return !used[p.f]; });
+    for (var i = 0; i + 1 < remaining.length; i += 2) {
+      used[remaining[i].f] = true;
+      used[remaining[i + 1].f] = true;
+      pairedSlides.push({ type: 'pair', photos: [remaining[i], remaining[i + 1]], score: 0 });
+    }
+
+    var leftoverSlides = [];
+    if (remaining.length % 2 === 1) {
+      var last = remaining[remaining.length - 1];
+      used[last.f] = true;
+      leftoverSlides.push({ type: 'leftover', photos: [last] });
+    }
+
+    var singleSlides = nonPairable.map(function (p) {
+      return { type: 'single', photos: [p] };
+    });
+
+    var allSlides = [].concat(pairedSlides, singleSlides, leftoverSlides);
+    if (SHUFFLE) {
+      shuffle(allSlides);
+    }
+
+    // Bonus: avoid showing two consecutive slides from the same date where possible
+    for (var k = 1; k < allSlides.length - 1; k++) {
+      var dPrev = getSlideDate(allSlides[k - 1]);
+      var dCur = getSlideDate(allSlides[k]);
+      if (dPrev && dCur && dPrev === dCur) {
+        for (var m = k + 1; m < allSlides.length; m++) {
+          var dCandidate = getSlideDate(allSlides[m]);
+          if (dCandidate !== dPrev) {
+            var tmp = allSlides[k];
+            allSlides[k] = allSlides[m];
+            allSlides[m] = tmp;
+            break;
+          }
+        }
+      }
+    }
+
+    return allSlides;
   }
 
   function renderSlide(slideEl, slide, va) {
@@ -508,9 +633,12 @@
   function initPhotos(list) {
     photos = list.map(function (item) {
       if (typeof item === 'string') {
-        return { f: item, src: item, w: 0, h: 0 };
+        return { f: item, src: item, w: 0, h: 0, partners: [] };
       }
-      return { f: item.f, w: item.w, h: item.h, src: 'photos/' + item.f };
+      var p = Object.assign({}, item);
+      p.src = 'photos/' + item.f;
+      p.partners = item.partners || [];
+      return p;
     });
     start();
   }
