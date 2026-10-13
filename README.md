@@ -134,12 +134,28 @@ A local desktop review page to verify tagging accuracy and pairing quality:
 
 ### Stay-awake stack & kiosk resilience
 
-Silk returns to the Echo Show home screen after ~10–15 minutes of idle time. The kiosk uses a multi-layer keep-awake approach:
-1. **Screen Wake Lock API**: requested once on start and re-requested periodically and on visibility changes.
+Silk returns to the Echo Show home screen after ~10–15 minutes of idle time, and kiosks run unattended for days over Wi-Fi. The kiosk uses a multi-layer keep-awake and network resilience approach:
+1. **Screen Wake Lock API**: requested on start, on visibility changes, every 60s, and re-requested in the `release` event handler when the document is visible.
 2. **Audio keepalive**: looping silent audio base64 (`?audio=unmuted` enables 1% volume mode if required).
 3. **Canvas video fallback**: hidden looping 2px canvas video stream via `captureStream()`.
-4. **Tap-to-start overlay**: appears if autoplay is initially blocked.
-5. **Nightly reload**: automatically reloads at 4:00 AM local time to refresh browser memory.
+4. **Tap-to-start overlay**: non-blocking translucent pill in the bottom corner ("tap to keep awake") that leaves the slideshow playing underneath. Any tap anywhere arms wake lock and audio.
+5. **Auto-hiding fullscreen button**: hides 10s after load (and immediately on arm); reappears for 10s on any tap while not fullscreen. Tapping it calls `arm()` directly.
+6. **Soft refresh & maintenance**:
+   - Re-fetches `photos/photos.json` every hour with `cache: 'no-cache'`. If changed, updates `photos` and rebuilds the queue seamlessly at the next wrap.
+   - Re-fetches `/` every hour with `cache: 'no-store'`, checks `<meta name="build" content="...">`, and reloads only if the build string changed and the browser is online.
+   - Never reloads while offline.
+   - Fallback full reload: only if the page has been running continuously for more than 7 days, at 4:00 AM local time, and online.
+7. **Transient failure handling**:
+   - Skips failed photos for the remainder of the round (and excludes them from partner matching) without dropping them permanently from `photos`.
+   - Only removes a photo permanently after 3 confirmed load failures while `navigator.onLine` is true and at least one other photo has loaded in between.
+   - Network outage hold: if 3 slides fail in a row, the kiosk stops advancing, holds the current slide on screen (never going blank), and retries every 30s until connectivity returns.
+8. **Slide watchdog & load timeouts**:
+   - 20-second timeout on image loading/decoding before rejection.
+   - Watchdog timer: calls `next()` if no slide transition occurs within $3 \times$ the longest slide duration while the document is visible.
+9. **Offline caching via Service Worker (`sw.js`)**:
+   - Runtime cache-first strategy for immutable hashed photos (`/photos/*.jpg`, `.jpeg`, `.png`, `.webp`).
+   - Network-first strategy (falling back to cache) for `/`, `/index.html`, and `/photos/photos.json`.
+   - On activate, cleans up cached photos no longer referenced in the latest manifest.
 
 ## URL parameters
 
@@ -151,23 +167,29 @@ All query parameters are optional:
 | `pairhold` | number | `1.5` | Multiplier for paired slide duration |
 | `shuffle` | `0` or `1` | `1` | Randomize photo order |
 | `layout` | `auto` or `single` | `auto` | Set to `single` to disable pairing |
+| `stack` | `3` | `off` | Enable 3-up vertical stacking for wide (e.g. 16:9) photos in portrait (mirror in landscape) |
 | `audio` | `muted` or `unmuted` | `muted` | Set to `unmuted` to play keepalive audio at 1% volume |
-| `debug` | `0` or `1` | `0` | Set to `1` to overlay filename, dimensions, crop loss, date, caption, tags, and pair scores |
+| `debug` | `0` or `1` | `0` | Set to `1` to overlay filename, dimensions, crop losses, date, caption, tags, and pair scores, and expose `window.__kiosk` |
 
 ## Photo sync workflow
 
-1. Add or replace image files in `photos/`.
-2. Run the sync script:
+1. Setup virtual environment (first time):
    ```bash
-   # Standard run with Claude API key
-   export ANTHROPIC_API_KEY="your-key-here"
-   python3 scripts/sync-photos.py
+   python3 -m venv .venv
+   .venv/bin/pip install -r scripts/requirements.txt
+   ```
+2. Add or replace image files in `photos/`.
+3. (Optional) Provide `ANTHROPIC_API_KEY` via environment variable or in a repo-local `.env` file (gitignored).
+4. Run the sync script:
+   ```bash
+   # Standard run with .venv python
+   .venv/bin/python scripts/sync-photos.py
 
    # With Google Takeout album directory
-   python3 scripts/sync-photos.py --takeout ~/Downloads/Takeout/Google\ Photos/Display
+   .venv/bin/python scripts/sync-photos.py --takeout ~/Downloads/Takeout/Google\ Photos/Display
 
    # Force re-tagging of all photos
-   python3 scripts/sync-photos.py --retag
+   .venv/bin/python scripts/sync-photos.py --retag
    ```
    The script will:
    - Rename images to their 10-character SHA1 content hash.
@@ -176,7 +198,8 @@ All query parameters are optional:
    - Compute local color features (luma, sat, warmth, palette, phash).
    - Precompute pair compatibility scores and apply manual overrides.
    - Generate compact `photos/photos.json` and formatted `photos/photos.debug.json`.
+   - Update `<meta name="build" content="...">` in `index.html`.
    - Print a summary of date sources, geo sources, and low-resolution photos (<1080px).
-3. Open `review.html` in your browser to spot-check tags and pairings.
-4. If needed, add adjustments to `photos/overrides.json` and re-run sync.
-5. Commit changes and push to deploy via Netlify.
+5. Open `review.html` in your browser to spot-check tags and pairings.
+6. If needed, add adjustments to `photos/overrides.json` and re-run sync.
+7. Commit changes and push to deploy via Netlify.

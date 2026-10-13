@@ -1079,6 +1079,9 @@
       wakeLock = await navigator.wakeLock.request('screen');
       wakeLock.addEventListener('release', function () {
         wakeLock = null;
+        if (document.visibilityState === 'visible') {
+          requestLock();
+        }
       });
       return true;
     } catch (e) {
@@ -1209,20 +1212,22 @@
   }
 
   /* ---------- expose kiosk state for diagnostics and testing ---------- */
-  window.__kiosk = {
-    getPhotos: function() { return photos; },
-    getQueue: function() { return slideQueue; },
-    getSlideIdx: function() { return slideIdx; },
-    isArmed: function() { return armed; },
-    getFront: function() { return front; },
-    getSlides: function() { return slides; },
-    getSlideTimer: function() { return slideTimer; },
-    getViewportSize: getViewportSize,
-    buildSlideQueue: buildSlideQueue,
-    renderSlide: renderSlide,
-    show: show,
-    next: next
-  };
+  if (DEBUG) {
+    window.__kiosk = {
+      getPhotos: function() { return photos; },
+      getQueue: function() { return slideQueue; },
+      getSlideIdx: function() { return slideIdx; },
+      isArmed: function() { return armed; },
+      getFront: function() { return front; },
+      getSlides: function() { return slides; },
+      getSlideTimer: function() { return slideTimer; },
+      getViewportSize: getViewportSize,
+      buildSlideQueue: buildSlideQueue,
+      renderSlide: renderSlide,
+      show: show,
+      next: next
+    };
+  }
 })();
 </script>
 </body>
