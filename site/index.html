@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="bea27bb3ee">
+<meta name="build" content="262b2cc366">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -986,6 +986,7 @@
       })
       .then(function (newList) {
         mergePhotos(newList);
+        notifySwOfPhotos(newList);
       })
       .catch(function () {});
 
@@ -1112,6 +1113,28 @@
   var backoffs = [5000, 15000, 60000, 300000];
   var retryAttempt = 0;
 
+  function notifySwOfPhotos(list) {
+    if (!('serviceWorker' in navigator) || !list || !Array.isArray(list)) return;
+    var fileList = list.map(function (item) {
+      return typeof item === 'string' ? item : item.f;
+    }).filter(Boolean);
+
+    var message = {
+      type: 'PRUNE_PHOTOS',
+      photos: fileList
+    };
+
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage(message);
+    } else {
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (reg && reg.active) {
+          reg.active.postMessage(message);
+        }
+      }).catch(function () {});
+    }
+  }
+
   function loadManifest() {
     fetch('photos/photos.json')
       .then(function (r) {
@@ -1122,6 +1145,7 @@
         hideStatusNote();
         retryAttempt = 0;
         initPhotos(list);
+        notifySwOfPhotos(list);
       })
       .catch(function () {
         showStatusNote();

@@ -8,6 +8,32 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
+function prunePhotos(manifest) {
+  if (!manifest || !Array.isArray(manifest)) return Promise.resolve();
+  const validPhotos = new Set();
+  manifest.forEach((item) => {
+    const f = typeof item === 'string' ? item : (item && item.f);
+    if (f) {
+      validPhotos.add(f);
+      validPhotos.add('/photos/' + f);
+    }
+  });
+  return caches.open(PHOTO_CACHE).then((photoCache) => {
+    return photoCache.keys().then((requests) => {
+      return Promise.all(
+        requests.map((req) => {
+          const url = new URL(req.url);
+          const path = url.pathname;
+          const fname = path.replace(/^\/photos\//, '');
+          if (!validPhotos.has(fname) && !validPhotos.has(path)) {
+            return photoCache.delete(req);
+          }
+        })
+      );
+    });
+  });
+}
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((shellCache) => {
@@ -16,31 +42,19 @@ self.addEventListener('activate', (event) => {
         return res.json().catch(() => null);
       });
     }).then((manifest) => {
-      if (!manifest || !Array.isArray(manifest)) return null;
-      const validPhotos = new Set();
-      manifest.forEach((item) => {
-        const f = typeof item === 'string' ? item : item.f;
-        if (f) {
-          validPhotos.add(f);
-          validPhotos.add('/photos/' + f);
-        }
-      });
-      return caches.open(PHOTO_CACHE).then((photoCache) => {
-        return photoCache.keys().then((requests) => {
-          return Promise.all(
-            requests.map((req) => {
-              const url = new URL(req.url);
-              const path = url.pathname;
-              const fname = path.replace(/^\/photos\//, '');
-              if (!validPhotos.has(fname) && !validPhotos.has(path)) {
-                return photoCache.delete(req);
-              }
-            })
-          );
-        });
-      });
+      return prunePhotos(manifest);
     }).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+  if (event.data.type === 'PRUNE_PHOTOS') {
+    const list = event.data.photos || event.data.manifest;
+    if (list) {
+      event.waitUntil(prunePhotos(list));
+    }
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -76,12 +90,19 @@ self.addEventListener('fetch', (event) => {
         if (networkResponse && networkResponse.ok) {
           const clone = networkResponse.clone();
           caches.open(SHELL_CACHE).then((cache) => {
-            cache.put(request, clone);
+            if (url.pathname === '/photos/photos.json') {
+              cache.put('/photos/photos.json', clone);
+            } else {
+              cache.put(request, clone);
+            }
           });
         }
         return networkResponse;
       }).catch(() => {
         return caches.open(SHELL_CACHE).then((cache) => {
+          if (url.pathname === '/photos/photos.json') {
+            return cache.match('/photos/photos.json');
+          }
           return cache.match(request, { ignoreSearch: true }).then((cached) => {
             if (cached) return cached;
             if (url.pathname === '/' || url.pathname === '/index.html') {
