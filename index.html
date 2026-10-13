@@ -299,6 +299,21 @@
     return 0;
   }
 
+  function getKeepaliveStatus() {
+    var aActive = audio ? (!audio.paused ? 'playing' : 'paused') + ' (rs ' + audio.readyState + ')' : 'none';
+    var vActive = vkeep ? (!vkeep.paused ? 'playing' : 'paused') + ' (rs ' + vkeep.readyState + ')' : 'none';
+    return 'audio ' + aActive + ' · video ' + vActive;
+  }
+
+  function updateKeepaliveReadouts() {
+    if (!DEBUG) return;
+    var statusText = 'keepalive: ' + getKeepaliveStatus();
+    var els = document.querySelectorAll('.debug-keepalive');
+    for (var i = 0; i < els.length; i++) {
+      els[i].textContent = statusText;
+    }
+  }
+
   function createDebugBadge(photo, va, pairScore) {
     if (!DEBUG || !photo) return null;
     var badge = document.createElement('div');
@@ -340,7 +355,11 @@
         lines.push('tags: ' + tagParts.join(' · '));
       }
     }
-    badge.textContent = lines.join('\n');
+    badge.textContent = lines.join('\n') + '\n';
+    var keepaliveDiv = document.createElement('div');
+    keepaliveDiv.className = 'debug-keepalive';
+    keepaliveDiv.textContent = 'keepalive: ' + getKeepaliveStatus();
+    badge.appendChild(keepaliveDiv);
     return badge;
   }
 
@@ -1105,12 +1124,54 @@
   }
 
   /* ---------- 3) fallback silent video frame ---------- */
-  try {
-    var v = document.getElementById('vkeep');
-    var c = document.createElement('canvas'); c.width = 2; c.height = 2;
-    v.srcObject = c.captureStream(1);
-    v.play().catch(function(){});
-  } catch (e) {}
+  var vkeep = document.getElementById('vkeep');
+  var vkeepCanvas = null;
+  var vkeepInterval = null;
+
+  function initVideoKeepalive() {
+    if (!vkeep || vkeep.srcObject) return;
+    try {
+      vkeepCanvas = document.createElement('canvas');
+      vkeepCanvas.width = 2;
+      vkeepCanvas.height = 2;
+      var ctx = vkeepCanvas.getContext('2d');
+      var toggle = false;
+      function drawFrame() {
+        toggle = !toggle;
+        ctx.fillStyle = toggle ? '#000000' : '#010101';
+        ctx.fillRect(0, 0, 1, 1);
+      }
+      drawFrame();
+      vkeepInterval = setInterval(drawFrame, 1000);
+      if (typeof vkeepCanvas.captureStream === 'function') {
+        vkeep.srcObject = vkeepCanvas.captureStream(1);
+        vkeep.play().catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function keepVideo() {
+    if (vkeep) {
+      if (!vkeep.srcObject && document.readyState === 'complete') initVideoKeepalive();
+      vkeep.play().catch(function () {});
+    }
+  }
+
+  if (document.readyState === 'complete') {
+    initVideoKeepalive();
+  } else {
+    window.addEventListener('load', function () {
+      setTimeout(initVideoKeepalive, 0);
+    });
+  }
+
+  if (DEBUG) {
+    ['play', 'pause', 'playing', 'canplay', 'loadedmetadata'].forEach(function (ev) {
+      if (audio) audio.addEventListener(ev, updateKeepaliveReadouts);
+      if (vkeep) vkeep.addEventListener(ev, updateKeepaliveReadouts);
+    });
+    setInterval(updateKeepaliveReadouts, 1000);
+  }
 
   /* ---------- 4) fullscreen ---------- */
   var fsBtn = document.getElementById('fsbtn');
@@ -1169,7 +1230,7 @@
 
   /* ---------- visibility: re-arm everything ---------- */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') { requestLock(); keepAudio(); goFullscreen(); }
+    if (document.visibilityState === 'visible') { requestLock(); keepAudio(); keepVideo(); goFullscreen(); }
   });
 
   /* ---------- gesture handling (arms on first, advances on later) ---------- */
@@ -1181,6 +1242,7 @@
     hideFsBtn();
     requestLock();
     keepAudio();
+    keepVideo();
     goFullscreen();
     armed = true;
   }
@@ -1201,8 +1263,12 @@
   /* ---------- go ---------- */
   requestLock();
   keepAudio();
+  keepVideo();
   goFullscreen();
-  setTimeout(keepAudio, 1500);
+  setTimeout(function () {
+    keepAudio();
+    keepVideo();
+  }, 1500);
 
   /* ---------- service worker registration ---------- */
   if ('serviceWorker' in navigator) {
