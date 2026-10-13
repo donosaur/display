@@ -82,10 +82,10 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch(() => {
         return caches.open(SHELL_CACHE).then((cache) => {
-          return cache.match(request).then((cached) => {
+          return cache.match(request, { ignoreSearch: true }).then((cached) => {
             if (cached) return cached;
             if (url.pathname === '/' || url.pathname === '/index.html') {
-              return cache.match('/index.html').then((idx) => idx || cache.match('/'));
+              return cache.match('/index.html', { ignoreSearch: true }).then((idx) => idx || cache.match('/', { ignoreSearch: true }));
             }
           });
         });
