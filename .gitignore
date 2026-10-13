@@ -3,3 +3,4 @@ Thumbs.db
 photos/photos.debug.json
 photos.debug.json
 .venv/
+.env

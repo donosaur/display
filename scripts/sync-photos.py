@@ -27,28 +27,31 @@ import time
 import urllib.error
 import urllib.request
 
-# Ensure PIL and numpy can be imported from local .venv if run with system python
-try:
-    from PIL import Image, ImageOps
-except ImportError:
-    venv_site = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        ".venv", "lib", f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages"
-    )
-    if os.path.isdir(venv_site) and venv_site not in sys.path:
-        sys.path.insert(0, venv_site)
-    from PIL import Image, ImageOps
+from PIL import Image, ImageOps
+import numpy as np
 
-try:
-    import numpy as np
-except ImportError:
-    venv_site = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        ".venv", "lib", f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages"
-    )
-    if os.path.isdir(venv_site) and venv_site not in sys.path:
-        sys.path.insert(0, venv_site)
-    import numpy as np
+
+def load_env_file():
+    """Load key-value pairs from a repo-local .env file into os.environ if not already set."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.isfile(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception as e:
+            print(f"Warning: could not read .env file: {e}")
+
+
+load_env_file()
 
 PHOTOS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "photos")
 MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
