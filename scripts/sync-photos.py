@@ -54,6 +54,7 @@ PHOTOS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
 DEBUG_MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.debug.json")
 TAGS_CACHE_PATH = os.path.join(PHOTOS_DIR, ".tags-cache.json")
+OVERRIDES_PATH = os.path.join(PHOTOS_DIR, "overrides.json")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 # Pair scoring weights (constants for tuning)
@@ -803,8 +804,63 @@ def compute_palette_lab_dist(lab_pal1, lab_pal2):
     return (sum(d1) + sum(d2)) / (len(d1) + len(d2))
 
 
-def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2):
-    """Compute pair score in 0..1 between two photos based on weighted criteria and penalties."""
+def load_overrides():
+    """Load manual overrides from photos/overrides.json if present."""
+    if not os.path.isfile(OVERRIDES_PATH):
+        return {"tags": {}, "never_pair": set(), "always_pair": set()}
+
+    try:
+        with open(OVERRIDES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        tags_overrides = data.get("tags") or {}
+
+        def _norm_pair(pair):
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                return None
+            return (min(str(pair[0]), str(pair[1])), max(str(pair[0]), str(pair[1])))
+
+        never_pair = set()
+        for p in data.get("never_pair") or []:
+            np = _norm_pair(p)
+            if np:
+                never_pair.add(np)
+
+        always_pair = set()
+        for p in data.get("always_pair") or []:
+            ap = _norm_pair(p)
+            if ap:
+                always_pair.add(ap)
+
+        print(
+            f"Loaded manual overrides from {OVERRIDES_PATH}: "
+            f"{len(tags_overrides)} tag overrides, {len(never_pair)} never_pair, {len(always_pair)} always_pair."
+        )
+        return {"tags": tags_overrides, "never_pair": never_pair, "always_pair": always_pair}
+    except Exception as e:
+        print(f"Warning: Failed to load overrides from {OVERRIDES_PATH}: {e}", file=sys.stderr)
+        return {"tags": {}, "never_pair": set(), "always_pair": set()}
+
+
+def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2, never_pair=None, always_pair=None):
+    """Compute pair score in 0..1 between two photos based on weighted criteria, penalties, and overrides."""
+    never_pair = never_pair or set()
+    always_pair = always_pair or set()
+
+    p1_f, p2_f = p1["f"], p2["f"]
+    p1_stem = os.path.splitext(p1_f)[0]
+    p2_stem = os.path.splitext(p2_f)[0]
+
+    pair_key = (min(p1_f, p2_f), max(p1_f, p2_f))
+    pair_key_stem = (min(p1_stem, p2_stem), max(p1_stem, p2_stem))
+
+    # Manual overrides take absolute precedence
+    if pair_key in never_pair or pair_key_stem in never_pair:
+        return 0.0
+
+    if pair_key in always_pair or pair_key_stem in always_pair:
+        return 1.0
+
     # Hard penalty 1: phash Hamming distance <= 10 (near-duplicate or burst shot)
     phash_dist = hamming_distance(p1["phash"], p2["phash"])
     if phash_dist <= HARD_PENALTY_PHASH_DIST:
@@ -889,8 +945,12 @@ def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2):
     return max(0.0, min(1.0, score))
 
 
-def compute_all_pair_scores(manifest):
-    """Compute pairwise scores for all photos and attach top 10 partners (score >= 0.2) to each."""
+def compute_all_pair_scores(manifest, overrides=None):
+    """Compute pairwise scores for all photos, apply overrides, and attach top 10 partners (score >= 0.2) to each."""
+    overrides = overrides or {}
+    never_pair = overrides.get("never_pair", set())
+    always_pair = overrides.get("always_pair", set())
+
     n = len(manifest)
     print(f"Scoring all {n * (n - 1) // 2} photo pairs...")
 
@@ -911,7 +971,7 @@ def compute_all_pair_scores(manifest):
             d2 = parsed_dates[j]
             lab2 = lab_palettes[j]
 
-            s = score_pair(p1, p2, d1, d2, lab1, lab2)
+            s = score_pair(p1, p2, d1, d2, lab1, lab2, never_pair=never_pair, always_pair=always_pair)
             if s >= MIN_PARTNER_SCORE:
                 partners_by_photo[i].append((p2["f"], round(s, 3)))
                 partners_by_photo[j].append((p1["f"], round(s, 3)))
@@ -920,6 +980,25 @@ def compute_all_pair_scores(manifest):
     for i in range(n):
         sorted_partners = sorted(partners_by_photo[i], key=lambda x: x[1], reverse=True)
         manifest[i]["partners"] = [[fn, sc] for fn, sc in sorted_partners[:MAX_PARTNERS]]
+
+    # Ensure always_pair entries are set to 1.0 at the very top of both partner lists
+    fn_to_idx = {p["f"]: idx for idx, p in enumerate(manifest)}
+    stem_to_idx = {os.path.splitext(p["f"])[0]: idx for idx, p in enumerate(manifest)}
+
+    for f1, f2 in always_pair:
+        idx1 = fn_to_idx.get(f1) if f1 in fn_to_idx else stem_to_idx.get(f1)
+        idx2 = fn_to_idx.get(f2) if f2 in fn_to_idx else stem_to_idx.get(f2)
+        if idx1 is not None and idx2 is not None:
+            p1_fn = manifest[idx1]["f"]
+            p2_fn = manifest[idx2]["f"]
+
+            # Place p2 at top of p1
+            cur1 = [item for item in manifest[idx1]["partners"] if item[0] != p2_fn]
+            manifest[idx1]["partners"] = [[p2_fn, 1.0]] + cur1[:MAX_PARTNERS - 1]
+
+            # Place p1 at top of p2
+            cur2 = [item for item in manifest[idx2]["partners"] if item[0] != p1_fn]
+            manifest[idx2]["partners"] = [[p1_fn, 1.0]] + cur2[:MAX_PARTNERS - 1]
 
     # Stats
     has_partners = sum(1 for p in manifest if len(p.get("partners", [])) > 0)
@@ -984,7 +1063,10 @@ def sync_photos(takeout_dir=None, retag=False):
     # 5. Visual tagging
     tags_cache = run_visual_tagging(unique_filenames, retag=retag)
 
-    # 6. Extract date, geo, tags, and local image features
+    # 6. Manual overrides
+    overrides = load_overrides()
+
+    # 7. Extract date, geo, tags, and local image features
     date_counts = {"Takeout": 0, "EXIF DateTimeOriginal": 0, "EXIF DateTime": 0, "None": 0}
     geo_counts = {"Takeout": 0, "EXIF GPS": 0, "None": 0}
 
@@ -1030,6 +1112,18 @@ def sync_photos(takeout_dir=None, retag=False):
             tags_obj = {k: v for k, v in tag_entry.items() if k != "caption"}
             caption_val = tag_entry.get("caption")
 
+        # Apply manual tag overrides if specified in overrides.json
+        fn_stem = os.path.splitext(filename)[0]
+        ov_tags = overrides["tags"].get(filename) or overrides["tags"].get(fn_stem)
+        if ov_tags and isinstance(ov_tags, dict):
+            if tags_obj is None:
+                tags_obj = {}
+            for ok, ov in ov_tags.items():
+                if ok == "caption":
+                    caption_val = ov
+                else:
+                    tags_obj[ok] = ov
+
         features = compute_local_features(filepath)
 
         entry = {
@@ -1051,10 +1145,10 @@ def sync_photos(takeout_dir=None, retag=False):
     # Sort manifest deterministically by filename
     manifest.sort(key=lambda item: item["f"])
 
-    # 7. Compute pair compatibility scores
-    compute_all_pair_scores(manifest)
+    # 8. Compute pair compatibility scores
+    compute_all_pair_scores(manifest, overrides=overrides)
 
-    # 8. Write compact photos.json (no indent) and formatted photos.debug.json
+    # 9. Write compact photos.json (no indent) and formatted photos.debug.json
     with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
         json.dump(manifest, f, separators=(",", ":"))
         f.write("\n")
@@ -1065,7 +1159,7 @@ def sync_photos(takeout_dir=None, retag=False):
 
     print(f"\nWrote {len(manifest)} photos to compact {MANIFEST_PATH} and debug {DEBUG_MANIFEST_PATH}.")
 
-    # 9. Print date and location summary
+    # 10. Print date and location summary
     total = len(manifest)
     total_with_date = total - date_counts["None"]
     total_with_geo = total - geo_counts["None"]
@@ -1084,7 +1178,7 @@ def sync_photos(takeout_dir=None, retag=False):
             print(f"    - {src}: {count}")
     print(f"    - No geo: {geo_counts['None']}")
 
-    # 10. Report low-resolution images
+    # 11. Report low-resolution images
     print(f"\n{len(under_1080)} images have longest edge under 1080px (originals can be swapped):")
     for fname, w, h in sorted(under_1080, key=lambda x: max(x[1], x[2])):
         print(f"  {fname}: {w}×{h} (longest: {max(w, h)}px)")
