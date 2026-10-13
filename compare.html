@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upscale Comparison — Display Kiosk</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --border-subtle: #f5f5f4;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --text-faint: #a8a29e;
+    --accent: #c2410c;
+    --accent-bg: #fff7ed;
+    --pill-critical-bg: #fee2e2;
+    --pill-critical-text: #991b1b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    line-height: 1.45;
+    padding: 24px;
+    max-width: 1440px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+
+  header.bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .subhead {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+  }
+
+  .nav-links a {
+    color: var(--text);
+    text-decoration: none;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.15s ease;
+  }
+
+  .nav-links a:hover {
+    border-color: var(--text-muted);
+  }
+
+  .nav-links a.primary {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-color: #fdba74;
+    font-weight: 500;
+  }
+
+  .view-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .mode-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .mode-btn.active {
+    background: var(--text);
+    color: var(--surface);
+    border-color: var(--text);
+    font-weight: 500;
+  }
+
+  /* Grid of comparisons */
+  .grid {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+  }
+
+  .file-info {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .filename {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .tier-badge {
+    background: var(--pill-critical-bg);
+    color: var(--pill-critical-text);
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  .dimensions-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Split Interactive Slider */
+  .slider-container {
+    position: relative;
+    width: 100%;
+    height: 580px;
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: ew-resize;
+  }
+
+  .slider-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+  }
+
+  .slider-before-wrap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 50%;
+    overflow: hidden;
+    border-right: 2px solid #ffffff;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+  }
+
+  .slider-before-wrap .slider-img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .badge-overlay {
+    position: absolute;
+    bottom: 12px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  .badge-left { left: 12px; }
+  .badge-right { right: 12px; }
+
+  .handle-circle {
+    position: absolute;
+    top: 50%;
+    right: -14px;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #1c1917;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    z-index: 30;
+    pointer-events: none;
+  }
+
+  /* Side-by-side mode */
+  .grid.mode-side-by-side .slider-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    height: auto;
+    cursor: default;
+    background: transparent;
+  }
+
+  .grid.mode-side-by-side .slider-before-wrap {
+    position: relative;
+    width: 100%;
+    height: 520px;
+    border-right: none;
+    box-shadow: none;
+    background: #000;
+    border-radius: 4px;
+  }
+
+  .grid.mode-side-by-side .slider-after-wrap {
+    position: relative;
+    width: 100%;
+    height: 520px;
+    background: #000;
+    border-radius: 4px;
+  }
+
+  .grid.mode-side-by-side .handle-circle {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="header-left">
+    <h1>AI Upscaling & Detail Comparison</h1>
+    <div class="subhead">Interactive before/after inspection for flagged low-resolution photos</div>
+  </div>
+  <div class="nav-links">
+    <a href="pairs.html">Review Pairings</a>
+    <a href="review.html" class="primary">&larr; Open Photo Review UI</a>
+    <a href="photos/photos.json" target="_blank">Manifest (JSON)</a>
+  </div>
+</header>
+
+<div class="view-controls">
+  <span style="font-size: 13px; color: var(--text-muted); margin-right: 8px;">View Mode:</span>
+  <button id="btn-slider" class="mode-btn active" type="button">Interactive Split Slider</button>
+  <button id="btn-side" class="mode-btn" type="button">Side-by-Side</button>
+</div>
+
+<main class="grid" id="comparison-grid"></main>
+
+<script>
+(function() {
+  "use strict";
+
+  var items = [
+    {
+      f: "759fab9191.jpg",
+      date: "2007-02-14",
+      orig_w: 397,
+      orig_h: 298,
+      orig_mp: "0.12",
+      new_w: 1588,
+      new_h: 1192,
+      new_mp: "1.89",
+      tier: "CRITICAL",
+      before: "photos/comparisons/759fab9191_orig.jpg",
+      after: "photos/comparisons/759fab9191_enhanced.jpg"
+    },
+    {
+      f: "4487261f8b.jpg",
+      date: "Original capture",
+      orig_w: 371,
+      orig_h: 371,
+      orig_mp: "0.14",
+      new_w: 1484,
+      new_h: 1484,
+      new_mp: "2.20",
+      tier: "CRITICAL",
+      before: "photos/comparisons/4487261f8b_orig.jpg",
+      after: "photos/comparisons/4487261f8b_enhanced.jpg"
+    },
+    {
+      f: "219cc7ed98.jpg",
+      date: "2007-01-13",
+      orig_w: 604,
+      orig_h: 378,
+      orig_mp: "0.23",
+      new_w: 2416,
+      new_h: 1512,
+      new_mp: "3.65",
+      tier: "CRITICAL",
+      before: "photos/comparisons/219cc7ed98_orig.jpg",
+      after: "photos/comparisons/219cc7ed98_enhanced.jpg"
+    },
+    {
+      f: "670d7ee305.jpg",
+      date: "Original capture",
+      orig_w: 601,
+      orig_h: 601,
+      orig_mp: "0.36",
+      new_w: 2404,
+      new_h: 2404,
+      new_mp: "5.78",
+      tier: "CRITICAL",
+      before: "photos/comparisons/670d7ee305_orig.jpg",
+      after: "photos/comparisons/670d7ee305_enhanced.jpg"
+    }
+  ];
+
+  var grid = document.getElementById('comparison-grid');
+  var btnSlider = document.getElementById('btn-slider');
+  var btnSide = document.getElementById('btn-side');
+
+  btnSlider.addEventListener('click', function() {
+    btnSlider.classList.add('active');
+    btnSide.classList.remove('active');
+    grid.classList.remove('mode-side-by-side');
+  });
+
+  btnSide.addEventListener('click', function() {
+    btnSide.classList.add('active');
+    btnSlider.classList.remove('active');
+    grid.classList.add('mode-side-by-side');
+  });
+
+  items.forEach(function(item) {
+    var card = document.createElement('div');
+    card.className = 'card';
+
+    var header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML = `
+      <div class="file-info">
+        <span class="filename">${item.f}</span>
+        <span class="tier-badge">${item.tier}</span>
+        <span style="color: var(--text-faint)">${item.date}</span>
+      </div>
+      <div class="dimensions-meta">
+        ${item.orig_w}×${item.orig_h} (${item.orig_mp} MP) &rarr; <strong style="color: var(--text)">${item.new_w}×${item.new_h} (${item.new_mp} MP)</strong> · 4× Upscale
+      </div>
+    `;
+    card.appendChild(header);
+
+    var container = document.createElement('div');
+    container.className = 'slider-container';
+
+    var afterWrap = document.createElement('div');
+    afterWrap.className = 'slider-after-wrap';
+    var afterImg = document.createElement('img');
+    afterImg.className = 'slider-img';
+    afterImg.src = item.after;
+    afterImg.alt = 'Upscaled photo';
+    afterWrap.appendChild(afterImg);
+    var afterBadge = document.createElement('div');
+    afterBadge.className = 'badge-overlay badge-right';
+    afterBadge.textContent = 'Enhanced (' + item.new_w + '×' + item.new_h + ')';
+    afterWrap.appendChild(afterBadge);
+    container.appendChild(afterWrap);
+
+    var beforeWrap = document.createElement('div');
+    beforeWrap.className = 'slider-before-wrap';
+    var beforeImg = document.createElement('img');
+    beforeImg.className = 'slider-img';
+    beforeImg.src = item.before;
+    beforeImg.alt = 'Original photo';
+    beforeWrap.appendChild(beforeImg);
+    var beforeBadge = document.createElement('div');
+    beforeBadge.className = 'badge-overlay badge-left';
+    beforeBadge.textContent = 'Original (' + item.orig_w + '×' + item.orig_h + ')';
+    beforeWrap.appendChild(beforeBadge);
+
+    var handle = document.createElement('div');
+    handle.className = 'handle-circle';
+    handle.innerHTML = '&#8644;';
+    beforeWrap.appendChild(handle);
+
+    container.appendChild(beforeWrap);
+    card.appendChild(container);
+    grid.appendChild(card);
+
+    // Interactive slider dragging
+    var isDragging = false;
+    function updatePos(e) {
+      if (grid.classList.contains('mode-side-by-side')) return;
+      var rect = container.getBoundingClientRect();
+      var clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      var pos = (clientX - rect.left) / rect.width;
+      if (pos < 0.02) pos = 0.02;
+      if (pos > 0.98) pos = 0.98;
+      beforeWrap.style.width = (pos * 100) + '%';
+      beforeImg.style.width = (rect.width) + 'px';
+      beforeImg.style.maxWidth = 'none';
+    }
+
+    container.addEventListener('mousedown', function(e) {
+      isDragging = true;
+      updatePos(e);
+    });
+    window.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      updatePos(e);
+    });
+    window.addEventListener('mouseup', function() {
+      isDragging = false;
+    });
+
+    container.addEventListener('touchstart', function(e) {
+      isDragging = true;
+      updatePos(e);
+    });
+    window.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      updatePos(e);
+    });
+    window.addEventListener('touchend', function() {
+      isDragging = false;
+    });
+
+    window.addEventListener('resize', function() {
+      var rect = container.getBoundingClientRect();
+      beforeImg.style.width = rect.width + 'px';
+      beforeImg.style.maxWidth = 'none';
+    });
+    // Initial size
+    setTimeout(function() {
+      var rect = container.getBoundingClientRect();
+      beforeImg.style.width = rect.width + 'px';
+      beforeImg.style.maxWidth = 'none';
+    }, 100);
+  });
+
+})();
+</script>
+</body>
+</html>

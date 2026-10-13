@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Review Pairings — Display Kiosk</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --border-subtle: #f5f5f4;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --text-faint: #a8a29e;
+    --accent: #c2410c;
+    --accent-bg: #fff7ed;
+    --accent-border: #fdba74;
+    --confirmed-bg: #f0fdf4;
+    --confirmed-text: #166534;
+    --confirmed-border: #bbf7d0;
+    --denied-bg: #fef2f2;
+    --denied-text: #991b1b;
+    --denied-border: #fecaca;
+    --score-high-bg: #fef3c7;
+    --score-high-text: #92400e;
+    --score-high-border: #fde68a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    line-height: 1.45;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* Top sticky control bar */
+  header.bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(247, 246, 243, 0.94);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .brand-group {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .stats {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .nav-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .nav-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+
+  .nav-link:hover {
+    color: var(--text);
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  /* Filter toolbar below header */
+  .toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .toolbar-left, .toolbar-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-tabs {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: #fafaf9;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .tab-btn:hover {
+    color: var(--text);
+  }
+
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    font-weight: 600;
+  }
+
+  .tab-count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    padding: 1px 5px;
+    border-radius: 10px;
+    background: #e7e5e4;
+    color: #44403c;
+  }
+
+  .tab-btn.active .tab-count {
+    background: #1c1917;
+    color: #ffffff;
+  }
+
+  .tab-btn[data-status="confirmed"].active .tab-count {
+    background: var(--confirmed-text);
+  }
+
+  .tab-btn[data-status="denied"].active .tab-count {
+    background: var(--denied-text);
+  }
+
+  select, input[type="search"] {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  select:focus, input[type="search"]:focus {
+    border-color: var(--text);
+  }
+
+  .btn {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+
+  .btn:hover {
+    border-color: var(--text-muted);
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+  }
+
+  .btn.primary:hover {
+    opacity: 0.92;
+  }
+
+  .btn.sync-btn {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-color: var(--accent-border);
+  }
+
+  .status-pill {
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: #f5f5f4;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .status-pill.saved {
+    background: var(--confirmed-bg);
+    color: var(--confirmed-text);
+    border-color: var(--confirmed-border);
+  }
+
+  /* Main Container */
+  main {
+    padding: 24px;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  /* Quick Keyboard Help Banner */
+  .shortcuts-banner {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .shortcut-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  kbd {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--text);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+  }
+
+  /* Pairs Grid */
+  .pairs-grid {
+    display: grid;
+    gap: 24px;
+  }
+
+  /* View mode: Stacked (Kiosk portrait emulation) */
+  .pairs-grid.view-stacked {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+
+  /* View mode: Side by side */
+  .pairs-grid.view-side {
+    grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+  }
+
+  /* View mode: Compact list */
+  .pairs-grid.view-compact {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Pairing Card */
+  .pair-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.15s ease;
+  }
+
+  .pair-card:hover {
+    border-color: #d6d3d1;
+  }
+
+  .pair-card.active-focused {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .pair-card.is-confirmed {
+    border-color: var(--confirmed-border);
+    background: #fcfffd;
+  }
+
+  .pair-card.is-denied {
+    border-color: var(--denied-border);
+    background: #fffcfc;
+    opacity: 0.75;
+  }
+
+  .pair-card.is-denied:hover {
+    opacity: 1;
+  }
+
+  .card-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafaf9;
+    font-size: 12px;
+    gap: 10px;
+  }
+
+  .pair-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .pair-names {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pair-names a {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .pair-names a:hover {
+    text-decoration: underline;
+    color: var(--accent);
+  }
+
+  .pair-plus {
+    color: var(--text-faint);
+  }
+
+  .header-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .score-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: #f5f5f4;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .score-badge.high {
+    background: var(--score-high-bg);
+    color: var(--score-high-text);
+    border-color: var(--score-high-border);
+  }
+
+  .score-badge.confirmed {
+    background: var(--confirmed-bg);
+    color: var(--confirmed-text);
+    border-color: var(--confirmed-border);
+  }
+
+  .state-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .state-badge.suggested {
+    background: #f5f5f4;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .state-badge.confirmed {
+    background: var(--confirmed-bg);
+    color: var(--confirmed-text);
+    border: 1px solid var(--confirmed-border);
+  }
+
+  .state-badge.denied {
+    background: var(--denied-bg);
+    color: var(--denied-text);
+    border: 1px solid var(--denied-border);
+  }
+
+  /* Photos Stage: Stacked Mode (Echo Show 15 1080x1920 portrait split) */
+  .view-stacked .photos-stage {
+    display: flex;
+    flex-direction: column;
+    background: #111111;
+    position: relative;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+  }
+
+  .view-stacked .photo-frame {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 2px solid #000000;
+  }
+
+  .view-stacked .photo-frame:last-child {
+    border-bottom: none;
+  }
+
+  .view-stacked .photo-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* Photos Stage: Side-by-side Mode */
+  .view-side .photos-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px;
+    background: #fafaf9;
+    aspect-ratio: 16 / 9;
+  }
+
+  .view-side .photo-frame {
+    position: relative;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #e7e5e4;
+  }
+
+  .view-side .photo-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* Photos Stage: Compact Mode */
+  .view-compact .pair-card {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .view-compact .card-header {
+    border-bottom: none;
+    border-right: 1px solid var(--border-subtle);
+    width: 240px;
+    flex-shrink: 0;
+  }
+
+  .view-compact .photos-stage {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    flex-shrink: 0;
+  }
+
+  .view-compact .photo-frame {
+    width: 64px;
+    height: 64px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #e7e5e4;
+  }
+
+  .view-compact .photo-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .view-compact .card-meta {
+    flex: 1;
+    padding: 8px 14px;
+    border-top: none;
+  }
+
+  .view-compact .card-actions {
+    padding: 8px 14px;
+    border-top: none;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  /* Frame overlay info */
+  .frame-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 8px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
+    color: #ffffff;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+  }
+
+  .frame-fn {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 500;
+  }
+
+  .frame-date {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    opacity: 0.85;
+  }
+
+  /* Card Meta & Breakdown */
+  .card-meta {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .breakdown-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .reason-pill {
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 11px;
+    background: #f5f5f4;
+    color: #44403c;
+    border: 1px solid #e7e5e4;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .reason-pill.positive {
+    background: #f0fdf4;
+    color: #166534;
+    border-color: #bbf7d0;
+  }
+
+  .reason-pill.penalty {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+  }
+
+  .palettes-compare {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .palette-swatches {
+    display: flex;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .swatch {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Card Actions Bar */
+  .card-actions {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border-subtle);
+    background: #fafaf9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .action-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+  }
+
+  .action-btn.confirm-btn {
+    color: #166534;
+  }
+
+  .action-btn.confirm-btn:hover, .action-btn.confirm-btn.active {
+    background: var(--confirmed-bg);
+    border-color: var(--confirmed-border);
+    color: var(--confirmed-text);
+    font-weight: 600;
+  }
+
+  .action-btn.deny-btn {
+    color: #991b1b;
+  }
+
+  .action-btn.deny-btn:hover, .action-btn.deny-btn.active {
+    background: var(--denied-bg);
+    border-color: var(--denied-border);
+    color: var(--denied-text);
+    font-weight: 600;
+  }
+
+  .action-btn.reset-btn {
+    color: var(--text-muted);
+  }
+
+  .action-btn.reset-btn:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  /* Empty state */
+  .empty-state {
+    padding: 80px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    grid-column: 1 / -1;
+  }
+
+  /* Modal for Add Custom Pair */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open {
+    display: flex;
+  }
+
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 520px;
+    padding: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  .modal-box h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1c1917;
+    color: #fafafa;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s ease;
+    pointer-events: none;
+    z-index: 300;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand-group">
+    <h1>Review Pairings</h1>
+    <div id="stats" class="stats">Loading...</div>
+  </div>
+
+  <nav class="nav-group">
+    <a href="index.html" class="nav-link">&larr; Slideshow</a>
+    <a href="review.html" class="nav-link">Photo Review</a>
+    <a href="compare.html" class="nav-link">Compare Upscales</a>
+  </nav>
+</header>
+
+<div class="toolbar">
+  <div class="toolbar-left">
+    <!-- Status Filter Tabs -->
+    <div class="filter-tabs">
+      <button class="tab-btn active" data-status="all" type="button">
+        All <span class="tab-count" id="count-all">0</span>
+      </button>
+      <button class="tab-btn" data-status="unreviewed" type="button">
+        Unreviewed <span class="tab-count" id="count-unreviewed">0</span>
+      </button>
+      <button class="tab-btn" data-status="confirmed" type="button">
+        Confirmed <span class="tab-count" id="count-confirmed">0</span>
+      </button>
+      <button class="tab-btn" data-status="denied" type="button">
+        Denied <span class="tab-count" id="count-denied">0</span>
+      </button>
+    </div>
+
+    <!-- Search Input -->
+    <input type="search" id="search-input" placeholder="Filter by photo, tag, or date...">
+
+    <!-- Score Filter -->
+    <select id="score-filter">
+      <option value="0.0">All Scores (≥0.20)</option>
+      <option value="0.35">Score ≥ 0.35</option>
+      <option value="0.45">Score ≥ 0.45</option>
+      <option value="0.50">Score ≥ 0.50 (High)</option>
+    </select>
+
+    <!-- Sort Dropdown -->
+    <select id="sort-select">
+      <option value="score-desc">Highest Score First</option>
+      <option value="score-asc">Lowest Score First</option>
+      <option value="status-first">Reviewed First</option>
+      <option value="date-desc">Newest Date First</option>
+    </select>
+  </div>
+
+  <div class="toolbar-right">
+    <!-- View Mode Toggle -->
+    <select id="view-mode">
+      <option value="stacked">Kiosk Split (Portrait 1080×1920)</option>
+      <option value="side">Side by Side</option>
+      <option value="compact">Compact Grid</option>
+    </select>
+
+    <button id="add-pair-btn" class="btn" type="button">+ Pair Photos</button>
+    <button id="save-btn" class="btn primary" type="button">Save Overrides</button>
+    <button id="sync-btn" class="btn sync-btn" type="button" title="Recompute scores and update photos.json">Sync Kiosk</button>
+    <div id="save-status" class="status-pill">Ready</div>
+  </div>
+</div>
+
+<main>
+  <!-- Keyboard Shortcut Helper -->
+  <div class="shortcuts-banner">
+    <div class="shortcut-keys">
+      <span><strong>Keyboard Review:</strong></span>
+      <span><kbd>C</kbd> or <kbd>Y</kbd> Confirm</span>
+      <span><kbd>D</kbd> or <kbd>N</kbd> Deny</span>
+      <span><kbd>R</kbd> Reset</span>
+      <span><kbd>J</kbd> / <kbd>↓</kbd> Next</span>
+      <span><kbd>K</kbd> / <kbd>↑</kbd> Prev</span>
+    </div>
+    <div style="font-size: 11px;">
+      Manual decisions take absolute precedence over algorithm scores.
+    </div>
+  </div>
+
+  <!-- Main Pairs Grid -->
+  <div id="pairs-grid" class="pairs-grid view-stacked"></div>
+</main>
+
+<!-- Add Custom Pair Modal -->
+<div id="add-pair-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h2>Manually Pair Two Photos</h2>
+    <div class="modal-form">
+      <div class="modal-field">
+        <label for="custom-p1">First Photo Filename:</label>
+        <input type="text" id="custom-p1" placeholder="e.g. 7ad421ed1c.jpg">
+      </div>
+      <div class="modal-field">
+        <label for="custom-p2">Second Photo Filename:</label>
+        <input type="text" id="custom-p2" placeholder="e.g. faf746e724.jpg">
+      </div>
+      <div class="modal-actions">
+        <button id="cancel-modal-btn" class="btn" type="button">Cancel</button>
+        <button id="confirm-modal-btn" class="btn primary" type="button">Confirm Pair</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var allPhotos = [];
+  var photoMap = {};
+  var allPairs = []; // Array of pair objects: { key, p1, p2, score, state: 'suggested'|'confirmed'|'denied', reasons: [] }
+  var overrides = { always_pair: [], never_pair: [], tags: {} };
+  var focusedPairIndex = 0;
+  var isServerSynced = false;
+
+  // DOM Elements
+  var statsEl = document.getElementById('stats');
+  var pairsGridEl = document.getElementById('pairs-grid');
+  var searchInput = document.getElementById('search-input');
+  var scoreFilterEl = document.getElementById('score-filter');
+  var sortSelect = document.getElementById('sort-select');
+  var viewModeSelect = document.getElementById('view-mode');
+  var tabButtons = document.querySelectorAll('.tab-btn');
+  var saveBtn = document.getElementById('save-btn');
+  var syncBtn = document.getElementById('sync-btn');
+  var saveStatusEl = document.getElementById('save-status');
+  var toastEl = document.getElementById('toast');
+
+  var countAllEl = document.getElementById('count-all');
+  var countUnreviewedEl = document.getElementById('count-unreviewed');
+  var countConfirmedEl = document.getElementById('count-confirmed');
+  var countDeniedEl = document.getElementById('count-denied');
+
+  var currentStatusFilter = 'all';
+
+  // Read URL params
+  var urlParams = new URLSearchParams(window.location.search);
+  var initialPhotoFilter = urlParams.get('photo') || '';
+  var initialStatusFilter = urlParams.get('status') || '';
+  if (initialPhotoFilter) {
+    searchInput.value = initialPhotoFilter;
+  }
+  if (initialStatusFilter && ['all', 'unreviewed', 'confirmed', 'denied'].indexOf(initialStatusFilter) !== -1) {
+    currentStatusFilter = initialStatusFilter;
+    tabButtons.forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-status') === currentStatusFilter);
+    });
+  }
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(function () {
+      toastEl.classList.remove('show');
+    }, 2800);
+  }
+
+  function normPairKey(f1, f2) {
+    var a = String(f1).toLowerCase();
+    var b = String(f2).toLowerCase();
+    return a < b ? a + '::' + b : b + '::' + a;
+  }
+
+  function parsePairKey(key) {
+    var parts = key.split('::');
+    return [parts[0], parts[1]];
+  }
+
+  // Load Overrides from localStorage or server
+  function loadOverrides() {
+    var localData = null;
+    try {
+      var raw = localStorage.getItem('display_overrides');
+      if (raw) localData = JSON.parse(raw);
+    } catch (e) {}
+
+    return fetch('/api/overrides')
+      .then(function (res) {
+        if (!res.ok) throw new Error('No API');
+        isServerSynced = true;
+        return res.json();
+      })
+      .then(function (serverData) {
+        overrides = serverData || { always_pair: [], never_pair: [], tags: {} };
+        // If local data had more recent edits, merge them
+        if (localData) {
+          mergeLocalOverrides(localData);
+        }
+        updateSaveStatus('Synced with server');
+      })
+      .catch(function () {
+        // Fallback to static photos/overrides.json or local storage
+        return fetch('photos/overrides.json')
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .catch(function () { return null; })
+          .then(function (fileData) {
+            overrides = localData || fileData || { always_pair: [], never_pair: [], tags: {} };
+            updateSaveStatus(localData ? 'Loaded local storage' : 'Loaded overrides.json');
+          });
+      });
+  }
+
+  function mergeLocalOverrides(local) {
+    var alwaysMap = {};
+    (overrides.always_pair || []).forEach(function (p) { alwaysMap[normPairKey(p[0], p[1])] = true; });
+    (local.always_pair || []).forEach(function (p) {
+      var k = normPairKey(p[0], p[1]);
+      if (!alwaysMap[k]) {
+        overrides.always_pair.push(p);
+        alwaysMap[k] = true;
+      }
+    });
+
+    var neverMap = {};
+    (overrides.never_pair || []).forEach(function (p) { neverMap[normPairKey(p[0], p[1])] = true; });
+    (local.never_pair || []).forEach(function (p) {
+      var k = normPairKey(p[0], p[1]);
+      if (!neverMap[k]) {
+        overrides.never_pair.push(p);
+        neverMap[k] = true;
+      }
+    });
+  }
+
+  function updateSaveStatus(msg, isSaved) {
+    saveStatusEl.textContent = msg;
+    saveStatusEl.className = 'status-pill' + (isSaved ? ' saved' : '');
+  }
+
+  function saveOverrides() {
+    // 1. Save to localStorage
+    try {
+      localStorage.setItem('display_overrides', JSON.stringify(overrides));
+    } catch (e) {}
+
+    // 2. Attempt save to server API
+    updateSaveStatus('Saving...', false);
+    fetch('/api/overrides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(overrides)
+    })
+    .then(function (res) {
+      if (!res.ok) throw new Error('API save failed');
+      return res.json();
+    })
+    .then(function (data) {
+      updateSaveStatus('Saved to photos/overrides.json', true);
+      showToast('Saved ' + (overrides.always_pair.length) + ' confirmed & ' + (overrides.never_pair.length) + ' denied overrides.');
+    })
+    .catch(function () {
+      updateSaveStatus('Saved locally (no API server)', false);
+      showToast('Saved to browser storage. Click Export to download overrides.json.');
+    });
+  }
+
+  function exportOverridesFile() {
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(overrides, null, 2) + "\n");
+    var dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute("href", dataStr);
+    dlAnchor.setAttribute("download", "overrides.json");
+    document.body.appendChild(dlAnchor);
+    dlAnchor.click();
+    dlAnchor.remove();
+    showToast('Downloaded overrides.json');
+  }
+
+  function syncKioskManifest() {
+    syncBtn.disabled = true;
+    syncBtn.textContent = 'Syncing...';
+    fetch('/api/sync', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        syncBtn.disabled = false;
+        syncBtn.textContent = 'Sync Kiosk';
+        if (data.ok) {
+          showToast('Kiosk partner scores recomputed successfully!');
+          setTimeout(function () { location.reload(); }, 1200);
+        } else {
+          alert('Sync error: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(function (err) {
+        syncBtn.disabled = false;
+        syncBtn.textContent = 'Sync Kiosk';
+        alert('Server API unreachable. Run in terminal:\n/Users/don/Projects/display/.venv/bin/python3 scripts/sync-photos.py');
+      });
+  }
+
+  // Build Pair List
+  function buildPairs() {
+    var pairsMap = {};
+
+    var alwaysMap = {};
+    (overrides.always_pair || []).forEach(function (p) {
+      alwaysMap[normPairKey(p[0], p[1])] = true;
+    });
+
+    var neverMap = {};
+    (overrides.never_pair || []).forEach(function (p) {
+      neverMap[normPairKey(p[0], p[1])] = true;
+    });
+
+    // 1. Process suggested partners from photos.json
+    allPhotos.forEach(function (p1) {
+      var partners = p1.partners || [];
+      partners.forEach(function (item) {
+        var p2fn = item[0];
+        var score = item[1];
+        var p2 = photoMap[p2fn];
+        if (!p2) return;
+
+        var key = normPairKey(p1.f, p2.f);
+        if (!pairsMap[key]) {
+          var state = 'suggested';
+          if (alwaysMap[key]) state = 'confirmed';
+          else if (neverMap[key]) state = 'denied';
+
+          pairsMap[key] = {
+            key: key,
+            p1: p1.f < p2.f ? p1 : p2,
+            p2: p1.f < p2.f ? p2 : p1,
+            score: state === 'confirmed' ? 1.0 : state === 'denied' ? 0.0 : score,
+            originalScore: score,
+            state: state,
+            reasons: computePairReasons(p1, p2, score)
+          };
+        }
+      });
+    });
+
+    // 2. Process any manual always_pair / never_pair that weren't in top 10
+    (overrides.always_pair || []).forEach(function (p) {
+      var key = normPairKey(p[0], p[1]);
+      if (!pairsMap[key]) {
+        var p1 = photoMap[p[0]];
+        var p2 = photoMap[p[1]];
+        if (p1 && p2) {
+          pairsMap[key] = {
+            key: key,
+            p1: p1.f < p2.f ? p1 : p2,
+            p2: p1.f < p2.f ? p2 : p1,
+            score: 1.0,
+            originalScore: 0.0,
+            state: 'confirmed',
+            reasons: computePairReasons(p1, p2, 1.0)
+          };
+        }
+      }
+    });
+
+    (overrides.never_pair || []).forEach(function (p) {
+      var key = normPairKey(p[0], p[1]);
+      if (!pairsMap[key]) {
+        var p1 = photoMap[p[0]];
+        var p2 = photoMap[p[1]];
+        if (p1 && p2) {
+          pairsMap[key] = {
+            key: key,
+            p1: p1.f < p2.f ? p1 : p2,
+            p2: p1.f < p2.f ? p2 : p1,
+            score: 0.0,
+            originalScore: 0.0,
+            state: 'denied',
+            reasons: computePairReasons(p1, p2, 0.0)
+          };
+        }
+      }
+    });
+
+    allPairs = Object.values(pairsMap);
+  }
+
+  function computePairReasons(p1, p2, score) {
+    var reasons = [];
+
+    // Date
+    if (p1.date && p2.date) {
+      var d1 = p1.date.slice(0, 10);
+      var d2 = p2.date.slice(0, 10);
+      if (d1 === d2) {
+        reasons.push({ text: 'Same day (' + d1 + ') +0.40', type: 'positive' });
+      } else {
+        var dt1 = new Date(p1.date);
+        var dt2 = new Date(p2.date);
+        var diffDays = Math.abs((dt1 - dt2) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 3) {
+          reasons.push({ text: 'Within 3 days (' + Math.round(diffDays) + 'd) +0.25', type: 'positive' });
+        } else if (d1.slice(0, 7) === d2.slice(0, 7)) {
+          reasons.push({ text: 'Same month (' + d1.slice(0, 7) + ') +0.10', type: 'positive' });
+        }
+      }
+    }
+
+    // Geo
+    if (p1.geo && p2.geo) {
+      reasons.push({ text: 'Geo match (+0.15)', type: 'positive' });
+    }
+
+    // Tags
+    var t1 = p1.tags || {};
+    var t2 = p2.tags || {};
+    if (t1.event_hint && t2.event_hint && t1.event_hint === t2.event_hint && t1.event_hint !== 'everyday') {
+      reasons.push({ text: 'Shared event: ' + t1.event_hint + ' (+0.10)', type: 'positive' });
+    }
+    if (t1.scene && t2.scene && t1.scene === t2.scene && t1.scene !== 'other') {
+      reasons.push({ text: 'Shared scene: ' + t1.scene + ' (+0.10)', type: 'positive' });
+    }
+
+    // Subjects
+    var s1 = t1.subjects || [];
+    var s2 = t2.subjects || [];
+    var sharedSub = s1.filter(function (x) { return s2.indexOf(x) !== -1; });
+    if (sharedSub.length > 0) {
+      reasons.push({ text: 'Shared: ' + sharedSub.join(', '), type: 'positive' });
+    }
+
+    // Luma diff penalty
+    if (p1.luma !== undefined && p2.luma !== undefined) {
+      var lumaDiff = Math.abs(p1.luma - p2.luma);
+      if (lumaDiff > 0.45) {
+        reasons.push({ text: 'High luma diff (' + lumaDiff.toFixed(2) + ') 0.5× penalty', type: 'penalty' });
+      }
+    }
+
+    return reasons;
+  }
+
+  // Filter & Sort Pairs
+  function getFilteredPairs() {
+    var query = (searchInput.value || '').trim().toLowerCase();
+    var minScore = parseFloat(scoreFilterEl.value) || 0.0;
+    var sortVal = sortSelect.value;
+
+    var filtered = allPairs.filter(function (pair) {
+      // Status filter
+      if (currentStatusFilter === 'confirmed' && pair.state !== 'confirmed') return false;
+      if (currentStatusFilter === 'denied' && pair.state !== 'denied') return false;
+      if (currentStatusFilter === 'unreviewed' && pair.state !== 'suggested') return false;
+
+      // Score filter
+      if (pair.state !== 'confirmed' && pair.originalScore < minScore) return false;
+
+      // Query filter
+      if (query) {
+        var f1Match = pair.p1.f.toLowerCase().indexOf(query) !== -1;
+        var f2Match = pair.p2.f.toLowerCase().indexOf(query) !== -1;
+        var cap1Match = pair.p1.caption && pair.p1.caption.toLowerCase().indexOf(query) !== -1;
+        var cap2Match = pair.p2.caption && pair.p2.caption.toLowerCase().indexOf(query) !== -1;
+        var date1Match = pair.p1.date && pair.p1.date.indexOf(query) !== -1;
+        var date2Match = pair.p2.date && pair.p2.date.indexOf(query) !== -1;
+        if (!f1Match && !f2Match && !cap1Match && !cap2Match && !date1Match && !date2Match) return false;
+      }
+
+      return true;
+    });
+
+    // Sorting
+    filtered.sort(function (a, b) {
+      if (sortVal === 'score-desc') return b.score - a.score;
+      if (sortVal === 'score-asc') return a.score - b.score;
+      if (sortVal === 'status-first') {
+        var order = { confirmed: 0, denied: 1, suggested: 2 };
+        if (order[a.state] !== order[b.state]) return order[a.state] - order[b.state];
+        return b.score - a.score;
+      }
+      if (sortVal === 'date-desc') {
+        var dA = (a.p1.date || '') > (a.p2.date || '') ? a.p1.date : a.p2.date;
+        var dB = (b.p1.date || '') > (b.p2.date || '') ? b.p1.date : b.p2.date;
+        return (dB || '').localeCompare(dA || '');
+      }
+      return 0;
+    });
+
+    return filtered;
+  }
+
+  // Confirm a pair
+  function confirmPair(pairKey) {
+    var pair = allPairs.find(function (p) { return p.key === pairKey; });
+    if (!pair) return;
+
+    pair.state = 'confirmed';
+    pair.score = 1.0;
+
+    var parts = parsePairKey(pairKey);
+    // Remove from never_pair
+    overrides.never_pair = (overrides.never_pair || []).filter(function (p) {
+      return normPairKey(p[0], p[1]) !== pairKey;
+    });
+
+    // Add to always_pair
+    var exists = (overrides.always_pair || []).some(function (p) {
+      return normPairKey(p[0], p[1]) === pairKey;
+    });
+    if (!exists) {
+      overrides.always_pair.push([parts[0], parts[1]]);
+    }
+
+    saveOverrides();
+    renderUI();
+  }
+
+  // Deny a pair
+  function denyPair(pairKey) {
+    var pair = allPairs.find(function (p) { return p.key === pairKey; });
+    if (!pair) return;
+
+    pair.state = 'denied';
+    pair.score = 0.0;
+
+    var parts = parsePairKey(pairKey);
+    // Remove from always_pair
+    overrides.always_pair = (overrides.always_pair || []).filter(function (p) {
+      return normPairKey(p[0], p[1]) !== pairKey;
+    });
+
+    // Add to never_pair
+    var exists = (overrides.never_pair || []).some(function (p) {
+      return normPairKey(p[0], p[1]) === pairKey;
+    });
+    if (!exists) {
+      overrides.never_pair.push([parts[0], parts[1]]);
+    }
+
+    saveOverrides();
+    renderUI();
+  }
+
+  // Reset a pair to suggested
+  function resetPair(pairKey) {
+    var pair = allPairs.find(function (p) { return p.key === pairKey; });
+    if (!pair) return;
+
+    pair.state = 'suggested';
+    pair.score = pair.originalScore;
+
+    overrides.always_pair = (overrides.always_pair || []).filter(function (p) {
+      return normPairKey(p[0], p[1]) !== pairKey;
+    });
+    overrides.never_pair = (overrides.never_pair || []).filter(function (p) {
+      return normPairKey(p[0], p[1]) !== pairKey;
+    });
+
+    saveOverrides();
+    renderUI();
+  }
+
+  function updateCounts() {
+    var total = allPairs.length;
+    var confirmed = allPairs.filter(function (p) { return p.state === 'confirmed'; }).length;
+    var denied = allPairs.filter(function (p) { return p.state === 'denied'; }).length;
+    var unreviewed = total - confirmed - denied;
+
+    countAllEl.textContent = total;
+    countUnreviewedEl.textContent = unreviewed;
+    countConfirmedEl.textContent = confirmed;
+    countDeniedEl.textContent = denied;
+
+    statsEl.textContent = total + ' pairs (' + confirmed + ' confirmed · ' + denied + ' denied · ' + unreviewed + ' unreviewed)';
+  }
+
+  // Render Grid
+  function renderUI() {
+    updateCounts();
+    var filtered = getFilteredPairs();
+
+    pairsGridEl.innerHTML = '';
+    if (filtered.length === 0) {
+      pairsGridEl.innerHTML = '<div class="empty-state">No pairings match your current filters.</div>';
+      return;
+    }
+
+    var viewMode = viewModeSelect.value;
+    pairsGridEl.className = 'pairs-grid view-' + viewMode;
+
+    var fragment = document.createDocumentFragment();
+
+    filtered.forEach(function (pair, idx) {
+      var card = document.createElement('div');
+      card.className = 'pair-card is-' + pair.state + (idx === focusedPairIndex ? ' active-focused' : '');
+      card.id = 'pair-' + pair.key.replace(/[:.]/g, '-');
+      card.setAttribute('data-pair-key', pair.key);
+
+      // Card Header
+      var header = document.createElement('div');
+      header.className = 'card-header';
+
+      var leftInfo = document.createElement('div');
+      leftInfo.style.display = 'flex';
+      leftInfo.style.alignItems = 'center';
+      leftInfo.style.gap = '8px';
+
+      var idSpan = document.createElement('span');
+      idSpan.className = 'pair-id';
+      idSpan.textContent = '#' + (idx + 1);
+
+      var namesDiv = document.createElement('div');
+      namesDiv.className = 'pair-names';
+      var a1 = document.createElement('a');
+      a1.href = 'review.html#photo-' + pair.p1.f.replace('.', '-');
+      a1.target = '_blank';
+      a1.textContent = pair.p1.f;
+      var plus = document.createElement('span');
+      plus.className = 'pair-plus';
+      plus.textContent = '+';
+      var a2 = document.createElement('a');
+      a2.href = 'review.html#photo-' + pair.p2.f.replace('.', '-');
+      a2.target = '_blank';
+      a2.textContent = pair.p2.f;
+
+      namesDiv.appendChild(a1);
+      namesDiv.appendChild(plus);
+      namesDiv.appendChild(a2);
+
+      leftInfo.appendChild(idSpan);
+      leftInfo.appendChild(namesDiv);
+
+      var rightBadges = document.createElement('div');
+      rightBadges.className = 'header-badges';
+
+      var scoreBadge = document.createElement('span');
+      scoreBadge.className = 'score-badge' + (pair.score >= 0.5 ? ' high' : '') + (pair.state === 'confirmed' ? ' confirmed' : '');
+      scoreBadge.textContent = pair.score.toFixed(3);
+      scoreBadge.title = 'Pair Score: ' + pair.score.toFixed(3);
+
+      var stateBadge = document.createElement('span');
+      stateBadge.className = 'state-badge ' + pair.state;
+      stateBadge.textContent = pair.state;
+
+      rightBadges.appendChild(scoreBadge);
+      rightBadges.appendChild(stateBadge);
+
+      header.appendChild(leftInfo);
+      header.appendChild(rightBadges);
+      card.appendChild(header);
+
+      // Photos Stage
+      var stage = document.createElement('div');
+      stage.className = 'photos-stage';
+
+      // Frame 1
+      var frame1 = document.createElement('div');
+      frame1.className = 'photo-frame';
+      var img1 = document.createElement('img');
+      img1.src = 'photos/' + pair.p1.f;
+      img1.loading = 'lazy';
+      img1.alt = pair.p1.f;
+      frame1.appendChild(img1);
+
+      var f1Info = document.createElement('div');
+      f1Info.className = 'frame-info';
+      var f1Fn = document.createElement('span');
+      f1Fn.className = 'frame-fn';
+      f1Fn.textContent = pair.p1.caption || pair.p1.f;
+      var f1Date = document.createElement('span');
+      f1Date.className = 'frame-date';
+      f1Date.textContent = pair.p1.date ? pair.p1.date.slice(0, 10) : '';
+      f1Info.appendChild(f1Fn);
+      f1Info.appendChild(f1Date);
+      frame1.appendChild(f1Info);
+
+      // Frame 2
+      var frame2 = document.createElement('div');
+      frame2.className = 'photo-frame';
+      var img2 = document.createElement('img');
+      img2.src = 'photos/' + pair.p2.f;
+      img2.loading = 'lazy';
+      img2.alt = pair.p2.f;
+      frame2.appendChild(img2);
+
+      var f2Info = document.createElement('div');
+      f2Info.className = 'frame-info';
+      var f2Fn = document.createElement('span');
+      f2Fn.className = 'frame-fn';
+      f2Fn.textContent = pair.p2.caption || pair.p2.f;
+      var f2Date = document.createElement('span');
+      f2Date.className = 'frame-date';
+      f2Date.textContent = pair.p2.date ? pair.p2.date.slice(0, 10) : '';
+      f2Info.appendChild(f2Fn);
+      f2Info.appendChild(f2Date);
+      frame2.appendChild(f2Info);
+
+      stage.appendChild(frame1);
+      stage.appendChild(frame2);
+      card.appendChild(stage);
+
+      // Card Meta / Reasons
+      var meta = document.createElement('div');
+      meta.className = 'card-meta';
+
+      var reasonsRow = document.createElement('div');
+      reasonsRow.className = 'breakdown-row';
+      if (pair.reasons.length > 0) {
+        pair.reasons.forEach(function (r) {
+          var pill = document.createElement('span');
+          pill.className = 'reason-pill ' + r.type;
+          pill.textContent = r.text;
+          reasonsRow.appendChild(pill);
+        });
+      } else {
+        var neutralPill = document.createElement('span');
+        neutralPill.className = 'reason-pill';
+        neutralPill.textContent = 'General visual & feature match';
+        reasonsRow.appendChild(neutralPill);
+      }
+      meta.appendChild(reasonsRow);
+
+      // Palettes Comparison
+      if (pair.p1.palette && pair.p2.palette) {
+        var palRow = document.createElement('div');
+        palRow.className = 'palettes-compare';
+        var pal1 = document.createElement('div');
+        pal1.className = 'palette-swatches';
+        pair.p1.palette.forEach(function (c) {
+          var sw = document.createElement('div');
+          sw.className = 'swatch';
+          sw.style.backgroundColor = c;
+          pal1.appendChild(sw);
+        });
+        var palDivider = document.createElement('span');
+        palDivider.style.color = 'var(--text-faint)';
+        palDivider.style.fontSize = '10px';
+        palDivider.textContent = 'vs';
+        var pal2 = document.createElement('div');
+        pal2.className = 'palette-swatches';
+        pair.p2.palette.forEach(function (c) {
+          var sw = document.createElement('div');
+          sw.className = 'swatch';
+          sw.style.backgroundColor = c;
+          pal2.appendChild(sw);
+        });
+        palRow.appendChild(pal1);
+        palRow.appendChild(palDivider);
+        palRow.appendChild(pal2);
+        meta.appendChild(palRow);
+      }
+
+      card.appendChild(meta);
+
+      // Card Actions
+      var actions = document.createElement('div');
+      actions.className = 'card-actions';
+
+      var btnGroup = document.createElement('div');
+      btnGroup.className = 'action-buttons';
+
+      // Confirm Button
+      var confirmBtn = document.createElement('button');
+      confirmBtn.className = 'action-btn confirm-btn' + (pair.state === 'confirmed' ? ' active' : '');
+      confirmBtn.innerHTML = '✓ Confirm';
+      confirmBtn.title = 'Always pair these two photos (Key: C)';
+      confirmBtn.addEventListener('click', function () {
+        confirmPair(pair.key);
+      });
+
+      // Deny Button
+      var denyBtn = document.createElement('button');
+      denyBtn.className = 'action-btn deny-btn' + (pair.state === 'denied' ? ' active' : '');
+      denyBtn.innerHTML = '✕ Deny';
+      denyBtn.title = 'Never pair these two photos (Key: D)';
+      denyBtn.addEventListener('click', function () {
+        denyPair(pair.key);
+      });
+
+      // Reset Button
+      var resetBtn = document.createElement('button');
+      resetBtn.className = 'action-btn reset-btn';
+      resetBtn.innerHTML = '↺ Reset';
+      resetBtn.title = 'Reset to algorithm suggestion (Key: R)';
+      resetBtn.addEventListener('click', function () {
+        resetPair(pair.key);
+      });
+
+      btnGroup.appendChild(confirmBtn);
+      btnGroup.appendChild(denyBtn);
+      if (pair.state !== 'suggested') {
+        btnGroup.appendChild(resetBtn);
+      }
+
+      var kioskViewLink = document.createElement('a');
+      kioskViewLink.href = 'index.html?debug=1';
+      kioskViewLink.target = '_blank';
+      kioskViewLink.style.fontSize = '11px';
+      kioskViewLink.style.color = 'var(--text-muted)';
+      kioskViewLink.style.textDecoration = 'none';
+      kioskViewLink.textContent = 'Preview in kiosk &rarr;';
+
+      actions.appendChild(btnGroup);
+      actions.appendChild(kioskViewLink);
+      card.appendChild(actions);
+
+      fragment.appendChild(card);
+    });
+
+    pairsGridEl.appendChild(fragment);
+  }
+
+  // Keyboard navigation & review
+  document.addEventListener('keydown', function (e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+      return;
+    }
+
+    var filtered = getFilteredPairs();
+    if (!filtered.length) return;
+
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedPairIndex = Math.min(filtered.length - 1, focusedPairIndex + 1);
+      scrollToFocusedPair(filtered);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedPairIndex = Math.max(0, focusedPairIndex - 1);
+      scrollToFocusedPair(filtered);
+    } else if (e.key === 'c' || e.key === 'C' || e.key === 'y' || e.key === 'Y') {
+      e.preventDefault();
+      if (filtered[focusedPairIndex]) {
+        confirmPair(filtered[focusedPairIndex].key);
+        focusedPairIndex = Math.min(filtered.length - 1, focusedPairIndex + 1);
+        scrollToFocusedPair(filtered);
+      }
+    } else if (e.key === 'd' || e.key === 'D' || e.key === 'n' || e.key === 'N') {
+      e.preventDefault();
+      if (filtered[focusedPairIndex]) {
+        denyPair(filtered[focusedPairIndex].key);
+        focusedPairIndex = Math.min(filtered.length - 1, focusedPairIndex + 1);
+        scrollToFocusedPair(filtered);
+      }
+    } else if (e.key === 'r' || e.key === 'R' || e.key === 'u' || e.key === 'U') {
+      e.preventDefault();
+      if (filtered[focusedPairIndex]) {
+        resetPair(filtered[focusedPairIndex].key);
+      }
+    }
+  });
+
+  function scrollToFocusedPair(filtered) {
+    var pair = filtered[focusedPairIndex];
+    if (!pair) return;
+    var el = document.getElementById('pair-' + pair.key.replace(/[:.]/g, '-'));
+    if (el) {
+      document.querySelectorAll('.pair-card.active-focused').forEach(function (c) {
+        c.classList.remove('active-focused');
+      });
+      el.classList.add('active-focused');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // Filter Event Listeners
+  tabButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      tabButtons.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentStatusFilter = btn.getAttribute('data-status');
+      focusedPairIndex = 0;
+      renderUI();
+    });
+  });
+
+  searchInput.addEventListener('input', function () {
+    focusedPairIndex = 0;
+    renderUI();
+  });
+
+  scoreFilterEl.addEventListener('change', function () {
+    focusedPairIndex = 0;
+    renderUI();
+  });
+
+  sortSelect.addEventListener('change', function () {
+    focusedPairIndex = 0;
+    renderUI();
+  });
+
+  viewModeSelect.addEventListener('change', function () {
+    renderUI();
+  });
+
+  saveBtn.addEventListener('click', saveOverrides);
+  syncBtn.addEventListener('click', syncKioskManifest);
+
+  // Add Custom Pair Modal Logic
+  var addPairModal = document.getElementById('add-pair-modal');
+  var addPairBtn = document.getElementById('add-pair-btn');
+  var cancelModalBtn = document.getElementById('cancel-modal-btn');
+  var confirmModalBtn = document.getElementById('confirm-modal-btn');
+  var customP1Input = document.getElementById('custom-p1');
+  var customP2Input = document.getElementById('custom-p2');
+
+  addPairBtn.addEventListener('click', function () {
+    addPairModal.classList.add('open');
+    customP1Input.focus();
+  });
+
+  cancelModalBtn.addEventListener('click', function () {
+    addPairModal.classList.remove('open');
+  });
+
+  confirmModalBtn.addEventListener('click', function () {
+    var f1 = customP1Input.value.trim();
+    var f2 = customP2Input.value.trim();
+    if (!f1 || !f2) {
+      alert('Please enter both filenames.');
+      return;
+    }
+    if (f1 === f2) {
+      alert('Cannot pair a photo with itself.');
+      return;
+    }
+    var p1 = photoMap[f1] || photoMap[f1 + '.jpg'];
+    var p2 = photoMap[f2] || photoMap[f2 + '.jpg'];
+    if (!p1 || !p2) {
+      alert('One or both photo filenames were not found in photos.json.');
+      return;
+    }
+
+    var key = normPairKey(p1.f, p2.f);
+    addPairModal.classList.remove('open');
+    confirmPair(key);
+    customP1Input.value = '';
+    customP2Input.value = '';
+    showToast('Added manual pair: ' + p1.f + ' + ' + p2.f);
+  });
+
+  // Initialization
+  loadOverrides()
+    .then(function () {
+      return fetch('photos/photos.json');
+    })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (photos) {
+      allPhotos = photos;
+      photos.forEach(function (p) { photoMap[p.f] = p; });
+      buildPairs();
+      renderUI();
+    })
+    .catch(function (err) {
+      statsEl.textContent = 'Error loading data: ' + err.message;
+    });
+
+})();
+</script>
+</body>
+</html>

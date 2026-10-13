@@ -173,6 +173,30 @@
     font-size: 11px;
   }
 
+  .res-pill {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 500;
+  }
+
+  .res-pill.critical {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+  }
+
+  .res-pill.upscale {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+  }
+
+  .res-pill.good {
+    color: var(--text-muted);
+  }
+
   .card-body {
     padding: 14px;
     display: grid;
@@ -414,6 +438,8 @@
 <header class="bar">
   <div class="brand-group">
     <h1>Photo Review</h1>
+    <a href="pairs.html" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Review Pairings &rarr;</a>
+    <a href="compare.html" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Compare Upscales &rarr;</a>
     <div id="stats" class="stats">Loading...</div>
   </div>
 
@@ -431,11 +457,14 @@
 
     <button id="toggle-nodate" class="toggle-btn" type="button">No Date</button>
     <button id="toggle-haspartners" class="toggle-btn" type="button">Has Partners</button>
+    <button id="toggle-upscale" class="toggle-btn" type="button">Needs Upscale (&lt;1080px)</button>
 
     <input type="search" id="search-input" placeholder="Search caption or filename...">
 
     <select id="sort-select">
       <option value="default">Default Order</option>
+      <option value="res-asc">Smallest Resolution</option>
+      <option value="res-desc">Largest Resolution</option>
       <option value="date-desc">Newest Date</option>
       <option value="date-asc">Oldest Date</option>
       <option value="partners-desc">Most Partners</option>
@@ -507,6 +536,7 @@
   var filterTagEl = document.getElementById('filter-tag');
   var toggleNoDateBtn = document.getElementById('toggle-nodate');
   var toggleHasPartnersBtn = document.getElementById('toggle-haspartners');
+  var toggleUpscaleBtn = document.getElementById('toggle-upscale');
   var searchInput = document.getElementById('search-input');
   var sortSelect = document.getElementById('sort-select');
   var statsEl = document.getElementById('stats');
@@ -515,6 +545,7 @@
 
   var filterNoDate = false;
   var filterHasPartners = false;
+  var filterUpscale = false;
 
   toggleNoDateBtn.addEventListener('click', function () {
     filterNoDate = !filterNoDate;
@@ -525,6 +556,12 @@
   toggleHasPartnersBtn.addEventListener('click', function () {
     filterHasPartners = !filterHasPartners;
     toggleHasPartnersBtn.classList.toggle('active', filterHasPartners);
+    applyFilters();
+  });
+
+  toggleUpscaleBtn.addEventListener('click', function () {
+    filterUpscale = !filterUpscale;
+    toggleUpscaleBtn.classList.toggle('active', filterUpscale);
     applyFilters();
   });
 
@@ -558,6 +595,7 @@
     var filtered = allPhotos.filter(function (p) {
       if (filterNoDate && p.date) return false;
       if (filterHasPartners && (!p.partners || p.partners.length === 0)) return false;
+      if (filterUpscale && Math.max(p.w, p.h) >= 1080) return false;
       if (!matchesTag(p, tagVal)) return false;
       if (query) {
         var matchFn = p.f && p.f.toLowerCase().indexOf(query) !== -1;
@@ -569,6 +607,18 @@
 
     // Sorting
     filtered.sort(function (a, b) {
+      if (sortVal === 'res-asc') {
+        var aMax = Math.max(a.w, a.h);
+        var bMax = Math.max(b.w, b.h);
+        if (aMax !== bMax) return aMax - bMax;
+        return (a.w * a.h) - (b.w * b.h);
+      }
+      if (sortVal === 'res-desc') {
+        var aMax = Math.max(a.w, a.h);
+        var bMax = Math.max(b.w, b.h);
+        if (aMax !== bMax) return bMax - aMax;
+        return (b.w * b.h) - (a.w * a.h);
+      }
       if (sortVal === 'date-desc') {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
@@ -602,7 +652,8 @@
     var total = allPhotos.length;
     var dated = allPhotos.filter(function (p) { return !!p.date; }).length;
     var withPartners = allPhotos.filter(function (p) { return p.partners && p.partners.length > 0; }).length;
-    statsEl.textContent = showingCount + ' / ' + total + ' photos (' + dated + ' dated · ' + withPartners + ' with partners)';
+    var needsUpscale = allPhotos.filter(function (p) { return Math.max(p.w, p.h) < 1080; }).length;
+    statsEl.textContent = showingCount + ' / ' + total + ' photos (' + dated + ' dated · ' + withPartners + ' with partners · ' + needsUpscale + ' <1080px)';
   }
 
   function renderGrid(photos) {
@@ -628,10 +679,11 @@
       fnLink.className = 'card-filename';
       fnLink.href = 'photos/' + p.f;
       fnLink.target = '_blank';
-      fnLink.textContent = p.f;
+      var maxDim = Math.max(p.w, p.h);
+      var mp = ((p.w * p.h) / 1000000).toFixed(1);
       var dimsSpan = document.createElement('span');
-      dimsSpan.className = 'card-dims';
-      dimsSpan.textContent = p.w + '×' + p.h;
+      dimsSpan.className = 'res-pill ' + (maxDim < 650 ? 'critical' : maxDim < 1080 ? 'upscale' : 'good');
+      dimsSpan.textContent = p.w + '×' + p.h + ' (' + mp + 'M)' + (maxDim < 650 ? ' · Critical' : maxDim < 1080 ? ' · Upscale' : '');
       header.appendChild(fnLink);
       header.appendChild(dimsSpan);
       card.appendChild(header);
@@ -750,7 +802,11 @@
       partnersSec.className = 'partners-section';
       var partnersTitle = document.createElement('div');
       partnersTitle.className = 'partners-title';
-      partnersTitle.textContent = 'Top Partners (' + ((p.partners && p.partners.length) || 0) + ')';
+      partnersTitle.style.display = 'flex';
+      partnersTitle.style.justifyContent = 'space-between';
+      partnersTitle.style.alignItems = 'center';
+      partnersTitle.innerHTML = '<span>Top Partners (' + ((p.partners && p.partners.length) || 0) + ')</span>' +
+        '<a href="pairs.html?photo=' + encodeURIComponent(p.f) + '" style="font-size: 10px; color: var(--accent); text-decoration: none; text-transform: none; font-weight: 500;">Review in Pairs &rarr;</a>';
       partnersSec.appendChild(partnersTitle);
 
       var partners = p.partners || [];

@@ -4,3 +4,7 @@ photos/photos.debug.json
 photos.debug.json
 .venv/
 .env
+upscaled-photos.zip
+photos/upscaled/
+photos/comparisons/
+photos/.tags-cache.json
