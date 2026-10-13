@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="3d5a73912d">
+<meta name="build" content="f76b9aec49">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -113,98 +113,81 @@
   }
   video#vkeep { position: fixed; width: 2px; height: 2px; opacity: 0.01; bottom: 0; left: 0; pointer-events: none; }
 
-  /* Info overlay: minimalist date, time, weather */
+  /* Info overlay: bold rounded condensed lockscreen style with heavy blur photo mask */
   .info-overlay {
     position: fixed;
-    bottom: max(3.5vh, env(safe-area-inset-bottom, 0px) + 16px);
-    left: max(3.5vw, env(safe-area-inset-left, 0px) + 16px);
+    top: max(8.5vh, env(safe-area-inset-top, 0px) + 28px);
+    left: max(6.5vw, env(safe-area-inset-left, 0px) + 24px);
     z-index: 25;
-    background: rgba(14, 14, 16, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    padding: clamp(16px, 2.2vh, 28px) clamp(20px, 2.5vw, 36px);
-    color: #f4f4f5;
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.9s;
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
+    transform: translateY(4px) scale(0.99);
+    transition:
+      opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      visibility 0.9s;
     user-select: none;
     -webkit-user-select: none;
+  }
+  .info-overlay.align-right {
+    left: auto;
+    right: max(6.5vw, env(safe-area-inset-right, 0px) + 24px);
   }
   .info-overlay.visible {
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(0) scale(1);
+    transition:
+      opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .info-time {
-    font-size: clamp(2.4rem, 5.5vw, 4rem);
-    font-weight: 300;
-    line-height: 1;
-    letter-spacing: -0.035em;
-    font-variant-numeric: tabular-nums;
-    color: #f4f4f5;
-    display: flex;
-    align-items: baseline;
+  .info-canvas {
+    display: block;
+    pointer-events: none;
   }
-  .info-ampm {
-    font-size: 0.38em;
-    font-weight: 400;
-    letter-spacing: -0.01em;
-    color: rgba(244, 244, 245, 0.6);
-    margin-left: 0.4em;
-    text-transform: uppercase;
-  }
-  .info-date {
-    font-size: clamp(0.95rem, 1.8vw, 1.25rem);
-    font-weight: 400;
-    line-height: 1.3;
-    letter-spacing: -0.01em;
-    color: rgba(244, 244, 245, 0.85);
-    margin-top: 0.2rem;
-  }
-  .info-weather {
-    font-size: clamp(0.9rem, 1.6vw, 1.15rem);
-    font-weight: 400;
-    line-height: 1.3;
-    color: rgba(244, 244, 245, 0.65);
-    display: flex;
-    align-items: center;
-    gap: 0.55em;
-    margin-top: 0.1rem;
-  }
-  .info-dot {
-    color: rgba(255, 255, 255, 0.3);
-    font-size: 0.9em;
-  }
-  .info-weather:empty {
-    display: none;
+  .info-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   @media (max-width: 600px) {
     .info-overlay {
-      bottom: max(2vh, env(safe-area-inset-bottom, 0px) + 12px);
-      left: max(3vw, env(safe-area-inset-left, 0px) + 12px);
-      right: max(3vw, env(safe-area-inset-right, 0px) + 12px);
-      padding: 16px 20px;
-      max-width: calc(100vw - 6vw);
+      top: max(7.5vh, env(safe-area-inset-top, 0px) + 24px);
+      left: max(6vw, env(safe-area-inset-left, 0px) + 20px);
+    }
+    .info-overlay.align-right {
+      left: auto;
+      right: max(6vw, env(safe-area-inset-right, 0px) + 20px);
     }
   }
   @media (prefers-reduced-motion: reduce) {
     .info-overlay, .info-overlay.visible {
       transition: opacity 0.05s ease !important;
+      transform: none !important;
     }
   }
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800;900&family=Plus+Jakarta+Sans:wght@600;700&family=Rubik:wght@700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="slide-a" class="slide"></div>
 <div id="slide-b" class="slide"></div>
 <div id="info-overlay" class="info-overlay" aria-live="polite">
-  <div class="info-time" id="info-time"></div>
-  <div class="info-date" id="info-date"></div>
-  <div class="info-weather" id="info-weather"></div>
+  <canvas id="info-canvas" class="info-canvas"></canvas>
+  <div class="info-sr-only">
+    <div class="info-date" id="info-date"></div>
+    <div class="info-weather" id="info-weather"></div>
+    <div class="info-time" id="info-time"></div>
+  </div>
 </div>
 <button id="fsbtn" type="button">&#x26F6; fullscreen</button>
 <div id="tapstart">tap to keep awake</div>
@@ -996,6 +979,9 @@
       var oldFront = front;
       front = back;
       lastSlideChangeTime = Date.now();
+      if (typeof onSlideChangedForOverlay === 'function') {
+        onSlideChangedForOverlay();
+      }
 
       // Autoplay incoming slide videos unless reduced motion preferred
       var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1296,6 +1282,9 @@
         if (p && p.catch) p.catch(function () {});
       }
     }
+    if (typeof renderInfoOverlayCanvas === 'function') {
+      renderInfoOverlayCanvas();
+    }
     scheduleNext();
   }
   function onResize() {
@@ -1529,48 +1518,75 @@
   /* ================= DATE, TIME, WEATHER INFO OVERLAY ================= */
   var INFO_OVERLAY_MS = 14000;
   var infoOverlayEl = document.getElementById('info-overlay');
+  var infoCanvasEl = document.getElementById('info-canvas');
   var infoTimer = null;
   var infoClockTicker = null;
+  var infoTransitionRaf = null;
   var CLOCK_24 = urlParams.get('clock') === '24';
 
   var WMO_WEATHER_MAP = {
-    0: { day: 'Sunny', night: 'Clear' },
-    1: { day: 'Mostly sunny', night: 'Mostly clear' },
-    2: { day: 'Partly cloudy', night: 'Partly cloudy' },
-    3: { day: 'Overcast', night: 'Overcast' },
-    45: { day: 'Foggy', night: 'Foggy' },
-    48: { day: 'Freezing fog', night: 'Freezing fog' },
-    51: { day: 'Light drizzle', night: 'Light drizzle' },
-    53: { day: 'Drizzle', night: 'Drizzle' },
-    55: { day: 'Heavy drizzle', night: 'Heavy drizzle' },
-    56: { day: 'Light freezing drizzle', night: 'Light freezing drizzle' },
-    57: { day: 'Freezing drizzle', night: 'Freezing drizzle' },
-    61: { day: 'Light rain', night: 'Light rain' },
-    63: { day: 'Rain', night: 'Rain' },
-    65: { day: 'Heavy rain', night: 'Heavy rain' },
-    66: { day: 'Light freezing rain', night: 'Light freezing rain' },
-    67: { day: 'Freezing rain', night: 'Freezing rain' },
-    71: { day: 'Light snow', night: 'Light snow' },
-    73: { day: 'Snow', night: 'Snow' },
-    75: { day: 'Heavy snow', night: 'Heavy snow' },
-    77: { day: 'Snow grains', night: 'Snow grains' },
-    80: { day: 'Light showers', night: 'Light showers' },
-    81: { day: 'Showers', night: 'Showers' },
-    82: { day: 'Heavy showers', night: 'Heavy showers' },
-    85: { day: 'Light snow showers', night: 'Light snow showers' },
-    86: { day: 'Snow showers', night: 'Snow showers' },
-    95: { day: 'Thunderstorm', night: 'Thunderstorm' },
-    96: { day: 'Thunderstorm with hail', night: 'Thunderstorm with hail' },
-    99: { day: 'Thunderstorm with hail', night: 'Thunderstorm with hail' }
+    0: { day: 'Sunny', night: 'Clear', iconDay: 'sunny', iconNight: 'clear-night' },
+    1: { day: 'Mostly sunny', night: 'Mostly clear', iconDay: 'partly-cloudy', iconNight: 'partly-cloudy' },
+    2: { day: 'Partly cloudy', night: 'Partly cloudy', iconDay: 'partly-cloudy', iconNight: 'partly-cloudy' },
+    3: { day: 'Overcast', night: 'Overcast', iconDay: 'cloudy', iconNight: 'cloudy' },
+    45: { day: 'Foggy', night: 'Foggy', iconDay: 'fog', iconNight: 'fog' },
+    48: { day: 'Freezing fog', night: 'Freezing fog', iconDay: 'fog', iconNight: 'fog' },
+    51: { day: 'Light drizzle', night: 'Light drizzle', iconDay: 'rain', iconNight: 'rain' },
+    53: { day: 'Drizzle', night: 'Drizzle', iconDay: 'rain', iconNight: 'rain' },
+    55: { day: 'Heavy drizzle', night: 'Heavy drizzle', iconDay: 'rain', iconNight: 'rain' },
+    56: { day: 'Light freezing drizzle', night: 'Light freezing drizzle', iconDay: 'rain', iconNight: 'rain' },
+    57: { day: 'Freezing drizzle', night: 'Freezing drizzle', iconDay: 'rain', iconNight: 'rain' },
+    61: { day: 'Light rain', night: 'Light rain', iconDay: 'rain', iconNight: 'rain' },
+    63: { day: 'Rain', night: 'Rain', iconDay: 'rain', iconNight: 'rain' },
+    65: { day: 'Heavy rain', night: 'Heavy rain', iconDay: 'rain', iconNight: 'rain' },
+    66: { day: 'Light freezing rain', night: 'Light freezing rain', iconDay: 'rain', iconNight: 'rain' },
+    67: { day: 'Freezing rain', night: 'Freezing rain', iconDay: 'rain', iconNight: 'rain' },
+    71: { day: 'Light snow', night: 'Light snow', iconDay: 'snow', iconNight: 'snow' },
+    73: { day: 'Snow', night: 'Snow', iconDay: 'snow', iconNight: 'snow' },
+    75: { day: 'Heavy snow', night: 'Heavy snow', iconDay: 'snow', iconNight: 'snow' },
+    77: { day: 'Snow grains', night: 'Snow grains', iconDay: 'snow', iconNight: 'snow' },
+    80: { day: 'Light showers', night: 'Light showers', iconDay: 'rain', iconNight: 'rain' },
+    81: { day: 'Showers', night: 'Showers', iconDay: 'rain', iconNight: 'rain' },
+    82: { day: 'Heavy showers', night: 'Heavy showers', iconDay: 'rain', iconNight: 'rain' },
+    85: { day: 'Light snow showers', night: 'Light snow showers', iconDay: 'snow', iconNight: 'snow' },
+    86: { day: 'Snow showers', night: 'Snow showers', iconDay: 'snow', iconNight: 'snow' },
+    95: { day: 'Thunderstorm', night: 'Thunderstorm', iconDay: 'thunderstorm', iconNight: 'thunderstorm' },
+    96: { day: 'Thunderstorm with hail', night: 'Thunderstorm with hail', iconDay: 'thunderstorm', iconNight: 'thunderstorm' },
+    99: { day: 'Thunderstorm with hail', night: 'Thunderstorm with hail', iconDay: 'thunderstorm', iconNight: 'thunderstorm' }
   };
 
   function getWeatherCondition(code, isDay) {
     var entry = WMO_WEATHER_MAP[code];
-    if (!entry) return isDay ? 'Clear' : 'Clear';
+    if (!entry) return 'Partly cloudy';
     return isDay ? entry.day : entry.night;
   }
 
-  var cachedWeather = null;
+  function getWeatherIconType(code, isDay, conditionStr) {
+    if (code !== undefined && code !== null && WMO_WEATHER_MAP[code]) {
+      var entry = WMO_WEATHER_MAP[code];
+      return isDay ? entry.iconDay : entry.iconNight;
+    }
+    if (conditionStr) {
+      var c = String(conditionStr).toLowerCase();
+      if (c.indexOf('thunder') !== -1 || c.indexOf('storm') !== -1) return 'thunderstorm';
+      if (c.indexOf('snow') !== -1 || c.indexOf('flurr') !== -1) return 'snow';
+      if (c.indexOf('rain') !== -1 || c.indexOf('drizzle') !== -1 || c.indexOf('shower') !== -1) return 'rain';
+      if (c.indexOf('fog') !== -1 || c.indexOf('mist') !== -1) return 'fog';
+      if (c.indexOf('overcast') !== -1) return 'cloudy';
+      if (c.indexOf('cloud') !== -1 || c.indexOf('mostly') !== -1) return 'partly-cloudy';
+      if (c.indexOf('clear') !== -1 && !isDay) return 'clear-night';
+      if (c.indexOf('sun') !== -1 || c.indexOf('clear') !== -1) return 'sunny';
+    }
+    return 'partly-cloudy';
+  }
+
+  var cachedWeather = {
+    temp: 70,
+    code: 2,
+    isDay: true,
+    condition: 'Partly cloudy',
+    icon: 'partly-cloudy'
+  };
   var lastWeatherFetchTime = 0;
   var weatherFetchInFlight = false;
   var activeLat = null;
@@ -1579,26 +1595,43 @@
   try {
     var rawCache = localStorage.getItem('display_weather');
     if (rawCache) {
-      cachedWeather = JSON.parse(rawCache);
+      var parsedCache = JSON.parse(rawCache);
+      if (parsedCache && parsedCache.temp !== undefined) {
+        parsedCache.icon = parsedCache.icon || getWeatherIconType(parsedCache.code, parsedCache.isDay !== false, parsedCache.condition);
+        cachedWeather = parsedCache;
+      }
     }
   } catch (err) {}
 
   function renderWeatherUI(w) {
     var el = document.getElementById('info-weather');
-    if (!el) return;
-    if (!w || w.temp === undefined || w.temp === null) {
-      el.innerHTML = '';
-      el.style.display = 'none';
-      return;
+    if (el) {
+      if (!w || w.temp === undefined || w.temp === null) {
+        el.innerHTML = '';
+        el.style.display = 'none';
+      } else {
+        el.style.display = 'flex';
+        var tempStr = Math.round(w.temp) + '°';
+        var condStr = w.condition || '';
+        var iconType = w.icon || getWeatherIconType(w.code, w.isDay !== false, condStr);
+        el.setAttribute('data-icon', iconType);
+        if (condStr) {
+          el.innerHTML = '<span class="info-temp">' + tempStr + '</span><span class="info-dot">·</span><span class="info-condition">' + condStr + '</span>';
+        } else {
+          el.innerHTML = '<span class="info-temp">' + tempStr + '</span>';
+        }
+      }
     }
-    el.style.display = 'flex';
-    var tempStr = Math.round(w.temp) + '°';
-    var condStr = w.condition || '';
-    if (condStr) {
-      el.innerHTML = '<span class="info-temp">' + tempStr + '</span><span class="info-dot">·</span><span class="info-condition">' + condStr + '</span>';
-    } else {
-      el.innerHTML = '<span class="info-temp">' + tempStr + '</span>';
+    if (w && w.temp !== undefined && w.temp !== null) {
+      cachedWeather = {
+        temp: w.temp,
+        code: w.code !== undefined ? w.code : 2,
+        isDay: w.isDay !== undefined ? w.isDay : true,
+        condition: w.condition || 'Partly cloudy',
+        icon: w.icon || getWeatherIconType(w.code, w.isDay !== false, w.condition)
+      };
     }
+    renderInfoOverlayCanvas();
   }
 
   function fetchWeather(userLat, userLon) {
@@ -1627,10 +1660,15 @@
         weatherFetchInFlight = false;
         if (!data || !data.current) return;
         var isDay = data.current.is_day !== 0;
-        var cond = getWeatherCondition(data.current.weather_code, isDay);
+        var code = data.current.weather_code;
+        var cond = getWeatherCondition(code, isDay);
+        var icon = getWeatherIconType(code, isDay, cond);
         var w = {
           temp: data.current.temperature_2m,
+          code: code,
+          isDay: isDay,
           condition: cond,
+          icon: icon,
           time: Date.now()
         };
         cachedWeather = w;
@@ -1673,28 +1711,923 @@
     }
   }
 
+  /* ---------- Color Science & Photo Sampling ---------- */
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+    return [h * 360, s, l];
+  }
+
+  function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    var r, g, b;
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      var hue2rgb = function (p, q, t) {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      var p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1 / 3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1 / 3);
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  // Fast 3-pass separable box blur approximating a true Gaussian blur
+  function blurImageData(imgData, w, h, radius) {
+    if (!imgData || !imgData.data || radius < 1) return;
+    var data = imgData.data;
+    var r = Math.min(Math.max(1, Math.round(radius)), Math.min(w, h) - 1);
+    var temp = new Uint8ClampedArray(data.length);
+
+    for (var pass = 0; pass < 3; pass++) {
+      for (var y = 0; y < h; y++) {
+        var rSum = 0, gSum = 0, bSum = 0, count = 0;
+        var rowOffset = y * w * 4;
+        for (var ix = -r; ix <= r; ix++) {
+          var cx = Math.min(w - 1, Math.max(0, ix));
+          var idx = rowOffset + cx * 4;
+          rSum += data[idx];
+          gSum += data[idx + 1];
+          bSum += data[idx + 2];
+          count++;
+        }
+        for (var x = 0; x < w; x++) {
+          var outIdx = rowOffset + x * 4;
+          temp[outIdx] = rSum / count;
+          temp[outIdx + 1] = gSum / count;
+          temp[outIdx + 2] = bSum / count;
+          temp[outIdx + 3] = 255;
+
+          var leftX = Math.max(0, x - r);
+          var rightX = Math.min(w - 1, x + r + 1);
+          var lIdx = rowOffset + leftX * 4;
+          var rIdx = rowOffset + rightX * 4;
+          rSum += data[rIdx] - data[lIdx];
+          gSum += data[rIdx + 1] - data[lIdx + 1];
+          bSum += data[rIdx + 2] - data[lIdx + 2];
+        }
+      }
+      for (var x2 = 0; x2 < w; x2++) {
+        var rSum2 = 0, gSum2 = 0, bSum2 = 0, count2 = 0;
+        for (var iy = -r; iy <= r; iy++) {
+          var cy = Math.min(h - 1, Math.max(0, iy));
+          var idx2 = (cy * w + x2) * 4;
+          rSum2 += temp[idx2];
+          gSum2 += temp[idx2 + 1];
+          bSum2 += temp[idx2 + 2];
+          count2++;
+        }
+        for (var y2 = 0; y2 < h; y2++) {
+          var outIdx2 = (y2 * w + x2) * 4;
+          data[outIdx2] = rSum2 / count2;
+          data[outIdx2 + 1] = gSum2 / count2;
+          data[outIdx2 + 2] = bSum2 / count2;
+          data[outIdx2 + 3] = 255;
+
+          var topY = Math.max(0, y2 - r);
+          var botY = Math.min(h - 1, y2 + r + 1);
+          var tIdx = (topY * w + x2) * 4;
+          var bIdx = (botY * w + x2) * 4;
+          rSum2 += temp[bIdx] - temp[tIdx];
+          gSum2 += temp[bIdx + 1] - temp[tIdx + 1];
+          bSum2 += temp[bIdx + 2] - temp[tIdx + 2];
+        }
+      }
+    }
+  }
+
+  // Blur alpha channel only + apply SDF threshold to round sharp glyph corners
+  function roundGlyphCornersAlpha(imgData, w, h, radius) {
+    if (!imgData || !imgData.data || radius < 1) return;
+    var data = imgData.data;
+    var r = Math.min(Math.max(1, Math.round(radius)), 12);
+    var alphaA = new Float32Array(w * h);
+    var alphaB = new Float32Array(w * h);
+    for (var i = 0, n = w * h; i < n; i++) {
+      alphaA[i] = data[i * 4 + 3];
+    }
+    var invDiam = 1 / (2 * r + 1);
+    for (var pass = 0; pass < 2; pass++) {
+      for (var y = 0; y < h; y++) {
+        var sum = 0;
+        var row = y * w;
+        for (var ix = -r; ix <= r; ix++) {
+          sum += alphaA[row + Math.min(w - 1, Math.max(0, ix))];
+        }
+        for (var x = 0; x < w; x++) {
+          alphaB[row + x] = sum * invDiam;
+          var lx = Math.max(0, x - r);
+          var rx = Math.min(w - 1, x + r + 1);
+          sum += alphaA[row + rx] - alphaA[row + lx];
+        }
+      }
+      for (var x2 = 0; x2 < w; x2++) {
+        var sum2 = 0;
+        for (var iy = -r; iy <= r; iy++) {
+          sum2 += alphaB[Math.min(h - 1, Math.max(0, iy)) * w + x2];
+        }
+        for (var y2 = 0; y2 < h; y2++) {
+          alphaA[y2 * w + x2] = sum2 * invDiam;
+          var ty = Math.max(0, y2 - r);
+          var by = Math.min(h - 1, y2 + r + 1);
+          sum2 += alphaB[by * w + x2] - alphaB[ty * w + x2];
+        }
+      }
+    }
+    for (var j = 0, total = w * h; j < total; j++) {
+      var a = alphaA[j];
+      var outA = 0;
+      if (a >= 142) {
+        outA = 255;
+      } else if (a > 110) {
+        var t = (a - 110) / 32;
+        outA = Math.round(t * t * (3 - 2 * t) * 255);
+      }
+      var idx = j * 4;
+      data[idx] = 255;
+      data[idx + 1] = 255;
+      data[idx + 2] = 255;
+      data[idx + 3] = outA;
+    }
+  }
+
+  function parseObjectPosition(posStr) {
+    if (!posStr) return [0.5, 0.5];
+    var parts = String(posStr).trim().split(/\s+/);
+    var parseVal = function (s, def) {
+      if (!s) return def;
+      if (s === 'left' || s === 'top') return 0;
+      if (s === 'right' || s === 'bottom') return 1;
+      if (s === 'center') return 0.5;
+      if (s.indexOf('%') !== -1) {
+        var v = parseFloat(s);
+        return isNaN(v) ? def : (v / 100);
+      }
+      return def;
+    };
+    var fx = parseVal(parts[0], 0.5);
+    var fy = parseVal(parts[1] !== undefined ? parts[1] : parts[0], 0.5);
+    return [fx, fy];
+  }
+
+  function drawSlideRegionToCanvas(targetCtx, targetW, targetH, screenX, screenY, screenW, screenH) {
+    targetCtx.fillStyle = '#18181b';
+    targetCtx.fillRect(0, 0, targetW, targetH);
+
+    var activeSlideEl = slides[front];
+    if (!activeSlideEl || !activeSlideEl.querySelectorAll) return false;
+
+    var mediaNodes = activeSlideEl.querySelectorAll('img, video');
+    if (!mediaNodes || !mediaNodes.length) return false;
+
+    var drewAny = false;
+    var scaleX = targetW / Math.max(1, screenW);
+    var scaleY = targetH / Math.max(1, screenH);
+
+    for (var i = 0; i < mediaNodes.length; i++) {
+      var node = mediaNodes[i];
+      var nw = node.naturalWidth || node.videoWidth || node.width || 0;
+      var nh = node.naturalHeight || node.videoHeight || node.height || 0;
+      if (!nw || !nh) continue;
+
+      var rect = node.getBoundingClientRect ? node.getBoundingClientRect() : { left: 0, top: 0, width: screenW, height: screenH };
+      if (rect.width <= 0 || rect.height <= 0) continue;
+
+      var style = window.getComputedStyle ? window.getComputedStyle(node) : node.style;
+      var fit = (style && style.objectFit) || node.style.objectFit || 'cover';
+      var pos = parseObjectPosition((style && style.objectPosition) || node.style.objectPosition);
+
+      var imgAspect = nw / nh;
+      var boxAspect = rect.width / rect.height;
+      var renderW, renderH, renderX, renderY;
+
+      if (fit === 'contain') {
+        if (imgAspect > boxAspect) {
+          renderW = rect.width;
+          renderH = rect.width / imgAspect;
+        } else {
+          renderH = rect.height;
+          renderW = rect.height * imgAspect;
+        }
+      } else {
+        if (imgAspect > boxAspect) {
+          renderH = rect.height;
+          renderW = rect.height * imgAspect;
+        } else {
+          renderW = rect.width;
+          renderH = rect.width / imgAspect;
+        }
+      }
+      renderX = rect.left + (rect.width - renderW) * pos[0];
+      renderY = rect.top + (rect.height - renderH) * pos[1];
+
+      targetCtx.save();
+      var clipX = (rect.left - screenX) * scaleX;
+      var clipY = (rect.top - screenY) * scaleY;
+      var clipW = rect.width * scaleX;
+      var clipH = rect.height * scaleY;
+      targetCtx.beginPath();
+      targetCtx.rect(clipX, clipY, clipW, clipH);
+      targetCtx.clip();
+
+      var dx = (renderX - screenX) * scaleX;
+      var dy = (renderY - screenY) * scaleY;
+      var dw = renderW * scaleX;
+      var dh = renderH * scaleY;
+
+      try {
+        targetCtx.drawImage(node, dx, dy, dw, dh);
+        drewAny = true;
+      } catch (e) {}
+      targetCtx.restore();
+    }
+    return drewAny;
+  }
+
+  var sampleCanvas = null;
+  var sampleCtx = null;
+  var backdropCanvas = null;
+  var backdropCtx = null;
+  var maskCanvas = null;
+  var maskCtx = null;
+  var numCanvas = null;
+  var numCtx = null;
+
+  var currentPalette = {
+    tintRgb: [224, 232, 235],
+    localLum: 0.35,
+    alignRight: false
+  };
+
+  function analyzeSlidePalette(vw, vh) {
+    if (!sampleCanvas && document.createElement) {
+      sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 48;
+      sampleCanvas.height = 48;
+      sampleCtx = sampleCanvas.getContext ? sampleCanvas.getContext('2d', { willReadFrequently: true }) : null;
+    }
+    if (!sampleCtx) return currentPalette;
+
+    var ok = drawSlideRegionToCanvas(sampleCtx, 48, 48, 0, 0, vw, vh);
+    if (!ok) return currentPalette;
+
+    var imgData;
+    try {
+      imgData = sampleCtx.getImageData(0, 0, 48, 48);
+    } catch (e) {
+      return currentPalette;
+    }
+    if (!imgData || !imgData.data) return currentPalette;
+
+    var data = imgData.data;
+    var hueBins = new Float32Array(36);
+    var binSatSum = new Float32Array(36);
+    var binLumSum = new Float32Array(36);
+    var binCount = new Float32Array(36);
+
+    var totalLum = 0;
+    var topLeftLum = 0, topLeftCount = 0;
+    var topRightLum = 0, topRightCount = 0;
+    var warmFloralWeight = 0;
+    var foliageGreenWeight = 0;
+    var maxSat = 0, maxSatHue = 200;
+
+    for (var y = 0; y < 48; y++) {
+      for (var x = 0; x < 48; x++) {
+        var idx = (y * 48 + x) * 4;
+        var r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        var hsl = rgbToHsl(r, g, b);
+        var h = hsl[0], s = hsl[1], l = hsl[2];
+        totalLum += l;
+
+        if (y >= 3 && y <= 28) {
+          if (x >= 2 && x <= 22) {
+            topLeftLum += l;
+            topLeftCount++;
+          } else if (x >= 26 && x <= 46) {
+            topRightLum += l;
+            topRightCount++;
+          }
+        }
+
+        if (s > maxSat && l > 0.15 && l < 0.85) {
+          maxSat = s;
+          maxSatHue = h;
+        }
+
+        if (l > 0.08 && l < 0.94 && s > 0.08) {
+          var weight = s * (1 - Math.abs(2 * l - 1) * 0.65);
+          var bin = Math.floor(h / 10) % 36;
+          hueBins[bin] += weight;
+          binSatSum[bin] += s * weight;
+          binLumSum[bin] += l * weight;
+          binCount[bin] += weight;
+
+          if ((h >= 305 || h <= 25) && s > 0.22 && l > 0.25) {
+            warmFloralWeight += weight;
+          }
+          if (h >= 75 && h <= 165 && s > 0.12) {
+            foliageGreenWeight += weight;
+          }
+        }
+      }
+    }
+
+    var globalLum = totalLum / (48 * 48);
+    var avgTopLeft = topLeftCount ? (topLeftLum / topLeftCount) : globalLum;
+    var avgTopRight = topRightCount ? (topRightLum / topRightCount) : globalLum;
+
+    // Smart glare avoidance: if top-left has a bright sun hotspot and top-right is significantly calmer (like Image 2)
+    var alignRight = (avgTopLeft > 0.50 && avgTopRight < avgTopLeft - 0.14);
+    var localLum = alignRight ? avgTopRight : avgTopLeft;
+
+    var smoothed = new Float32Array(36);
+    var bestBin = 0, bestWeight = -1;
+    for (var bIdx = 0; bIdx < 36; bIdx++) {
+      var prev = (bIdx + 35) % 36;
+      var next = (bIdx + 1) % 36;
+      smoothed[bIdx] = hueBins[prev] * 0.25 + hueBins[bIdx] * 0.5 + hueBins[next] * 0.25;
+      if (smoothed[bIdx] > bestWeight) {
+        bestWeight = smoothed[bIdx];
+        bestBin = bIdx;
+      }
+    }
+
+    var domHue = (bestBin * 10 + 5) % 360;
+    var domSat = binCount[bestBin] > 0 ? (binSatSum[bestBin] / binCount[bestBin]) : 0.35;
+
+    var targetHue = domHue;
+    var targetSat = 0.38;
+    var targetLum = 0.85;
+
+    if (globalLum < 0.24 && maxSat > 0.55) {
+      targetHue = maxSatHue;
+      targetSat = Math.min(0.76, Math.max(0.58, maxSat * 0.82));
+      targetLum = 0.75;
+    } else if (warmFloralWeight > 12 && foliageGreenWeight > 10) {
+      targetHue = 188;
+      targetSat = 0.28;
+      targetLum = 0.78;
+    } else if (bestWeight < 4) {
+      targetHue = 195;
+      targetSat = 0.14;
+      targetLum = 0.86;
+    } else {
+      if (domHue >= 18 && domHue <= 55 && foliageGreenWeight > 14) {
+        targetHue = 86;
+        targetSat = 0.28;
+        targetLum = 0.85;
+      } else {
+        targetHue = domHue;
+        targetSat = Math.min(0.54, Math.max(0.28, domSat * 0.85));
+        targetLum = Math.min(0.90, Math.max(0.80, 0.86 - (localLum - 0.4) * 0.08));
+      }
+    }
+
+    currentPalette = {
+      tintRgb: hslToRgb(targetHue, targetSat, targetLum),
+      localLum: localLum,
+      alignRight: alignRight
+    };
+    return currentPalette;
+  }
+
+  /* ---------- Weather Icon Vector Renderer ---------- */
+  function drawPillCloud(ctx, cx, cy, w, h) {
+    var baseH = h * 0.56;
+    var baseY = cy + h * 0.5 - baseH;
+    var r = baseH / 2;
+    ctx.beginPath();
+    ctx.arc(cx - w * 0.5 + r, baseY + r, r, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.arc(cx + w * 0.5 - r, baseY + r, r, Math.PI * 1.5, Math.PI * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx - w * 0.08, cy - h * 0.02, h * 0.36, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx + w * 0.20, cy + h * 0.06, h * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawWeatherIcon(ctx, iconType, x, y, size) {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    var cx = x + size * 0.5;
+    var cy = y + size * 0.5;
+
+    if (iconType === 'sunny') {
+      var sunR = size * 0.27;
+      ctx.beginPath();
+      ctx.arc(cx, cy, sunR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineWidth = size * 0.105;
+      for (var i = 0; i < 8; i++) {
+        var ang = (i * Math.PI) / 4;
+        var r1 = size * 0.38;
+        var r2 = size * 0.47;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+        ctx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+        ctx.stroke();
+      }
+    } else if (iconType === 'clear-night') {
+      ctx.beginPath();
+      ctx.arc(cx, cy, size * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.arc(cx + size * 0.18, cy - size * 0.14, size * 0.32, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (iconType === 'partly-cloudy') {
+      var sCx = x + size * 0.58;
+      var sCy = y + size * 0.43;
+      var sR = size * 0.33;
+      ctx.beginPath();
+      ctx.arc(sCx, sCy, sR, 0, Math.PI * 2);
+      ctx.fill();
+
+      var cCx = x + size * 0.36;
+      var cCy = y + size * 0.66;
+      var cW = size * 0.56;
+      var cH = size * 0.38;
+      var gap = size * 0.075;
+
+      ctx.globalCompositeOperation = 'destination-out';
+      drawPillCloud(ctx, cCx, cCy, cW + gap * 2, cH + gap * 2);
+
+      ctx.globalCompositeOperation = 'source-over';
+      drawPillCloud(ctx, cCx, cCy, cW, cH);
+    } else if (iconType === 'cloudy') {
+      drawPillCloud(ctx, x + size * 0.58, y + size * 0.42, size * 0.58, size * 0.40);
+      ctx.globalCompositeOperation = 'destination-out';
+      drawPillCloud(ctx, x + size * 0.44, y + size * 0.58, size * 0.78, size * 0.54);
+      ctx.globalCompositeOperation = 'source-over';
+      drawPillCloud(ctx, x + size * 0.44, y + size * 0.58, size * 0.68, size * 0.46);
+    } else if (iconType === 'fog') {
+      drawPillCloud(ctx, cx, y + size * 0.40, size * 0.76, size * 0.44);
+      ctx.lineWidth = size * 0.095;
+      ctx.beginPath();
+      ctx.moveTo(x + size * 0.18, y + size * 0.73);
+      ctx.lineTo(x + size * 0.82, y + size * 0.73);
+      ctx.moveTo(x + size * 0.26, y + size * 0.90);
+      ctx.lineTo(x + size * 0.74, y + size * 0.90);
+      ctx.stroke();
+    } else if (iconType === 'rain') {
+      drawPillCloud(ctx, cx, y + size * 0.38, size * 0.78, size * 0.46);
+      ctx.lineWidth = size * 0.095;
+      var drops = [0.28, 0.50, 0.72];
+      for (var d = 0; d < drops.length; d++) {
+        var dx = x + size * drops[d];
+        ctx.beginPath();
+        ctx.moveTo(dx + size * 0.03, y + size * 0.70);
+        ctx.lineTo(dx - size * 0.04, y + size * 0.90);
+        ctx.stroke();
+      }
+    } else if (iconType === 'snow') {
+      drawPillCloud(ctx, cx, y + size * 0.38, size * 0.78, size * 0.46);
+      var flakes = [0.28, 0.50, 0.72];
+      for (var f = 0; f < flakes.length; f++) {
+        ctx.beginPath();
+        ctx.arc(x + size * flakes[f], y + size * 0.81, size * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (iconType === 'thunderstorm') {
+      drawPillCloud(ctx, cx, y + size * 0.36, size * 0.78, size * 0.44);
+      ctx.beginPath();
+      ctx.moveTo(cx + size * 0.04, y + size * 0.60);
+      ctx.lineTo(cx - size * 0.12, y + size * 0.79);
+      ctx.lineTo(cx + size * 0.02, y + size * 0.79);
+      ctx.lineTo(cx - size * 0.06, y + size * 0.98);
+      ctx.lineTo(cx + size * 0.15, y + size * 0.74);
+      ctx.lineTo(cx + size * 0.01, y + size * 0.74);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* ---------- Giant Rounded-Corner Condensed Numerals (Pixel Lockscreen Style) ---------- */
+  function fillStadium(ctx, x, y, w, h) {
+    var r = Math.min(w, h) * 0.5;
+    ctx.beginPath();
+    if (h >= w) {
+      ctx.arc(x + r, y + r, r, Math.PI, 0);
+      ctx.arc(x + r, y + h - r, r, 0, Math.PI);
+    } else {
+      ctx.arc(x + r, y + r, r, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.arc(x + w - r, y + r, r, Math.PI * 1.5, Math.PI * 0.5);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawLockscreenDigit(ctx, digitChar, x, y, w, h) {
+    var t = w * 0.345;
+    var cw = w - 2 * t;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#ffffff';
+
+    if (digitChar === '0') {
+      fillStadium(ctx, 0, 0, w, h);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t, t * 0.90, cw, h - t * 1.80);
+    } else if (digitChar === '1') {
+      var stemX = w * 0.36;
+      ctx.fillRect(stemX, 0, t * 1.08, h);
+      ctx.beginPath();
+      ctx.moveTo(w * 0.08, t * 0.35);
+      ctx.lineTo(stemX + t * 1.08, 0);
+      ctx.lineTo(stemX + t * 1.08, t * 1.05);
+      ctx.lineTo(w * 0.08, t * 1.30);
+      ctx.closePath();
+      ctx.fill();
+    } else if (digitChar === '2') {
+      var archH = h * 0.55;
+      fillStadium(ctx, 0, 0, w, archH);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t, t * 0.88, cw, archH - t * 1.65);
+      ctx.fillRect(0, h * 0.30, w * 0.55, archH - h * 0.30);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.moveTo(w, archH * 0.44);
+      ctx.lineTo(w, archH * 0.68);
+      ctx.lineTo(t * 0.95, h - t * 0.86);
+      ctx.lineTo(0, h - t * 0.86);
+      ctx.lineTo(0, h - t * 1.68);
+      ctx.lineTo(w - t * 0.92, archH * 0.36);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(0, h - t * 0.92, w, t * 0.92);
+    } else if (digitChar === '3') {
+      var topH = h * 0.54;
+      var botY = h * 0.43;
+      var botH = h - botY;
+      fillStadium(ctx, w * 0.02, 0, w * 0.96, topH);
+      fillStadium(ctx, 0, botY, w, botH);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, w * 0.02 + t * 0.96, t * 0.86, w * 0.96 - t * 1.92, topH - t * 1.68);
+      fillStadium(ctx, t * 0.96, botY + t * 0.82, w - t * 1.92, botH - t * 1.68);
+      ctx.fillRect(0, h * 0.29, w * 0.52, h * 0.41);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillRect(w * 0.32, h * 0.42, w * 0.48, t * 0.86);
+    } else if (digitChar === '4') {
+      var rStemX = w - t * 1.16;
+      var barY = h * 0.54;
+      ctx.fillRect(rStemX, 0, t * 1.02, h);
+      ctx.fillRect(0, barY, w, t * 0.90);
+      ctx.beginPath();
+      ctx.moveTo(w * 0.36, 0);
+      ctx.lineTo(w * 0.36 + t * 1.0, 0);
+      ctx.lineTo(t * 0.96, barY + t * 0.4);
+      ctx.lineTo(0, barY + t * 0.4);
+      ctx.lineTo(0, barY - t * 0.25);
+      ctx.closePath();
+      ctx.fill();
+    } else if (digitChar === '5') {
+      var bowlY = h * 0.37;
+      var bowlH = h - bowlY;
+      fillStadium(ctx, 0, bowlY, w, bowlH);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t * 0.96, bowlY + t * 0.85, w - t * 1.92, bowlH - t * 1.72);
+      ctx.fillRect(0, h * 0.54, t * 1.15, h * 0.14);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillRect(w * 0.02, 0, w * 0.94, t * 0.92);
+      ctx.fillRect(w * 0.02, 0, t * 0.96, h * 0.55);
+    } else if (digitChar === '6') {
+      var bY6 = h * 0.40;
+      var bH6 = h - bY6;
+      fillStadium(ctx, 0, 0, w, h);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t * 0.96, t * 0.88, w - t * 1.92, h * 0.54);
+      ctx.fillRect(w * 0.48, h * 0.25, w * 0.54, h * 0.45);
+      ctx.globalCompositeOperation = 'source-over';
+      fillStadium(ctx, 0, bY6, w, bH6);
+      ctx.fillRect(0, h * 0.25, t * 0.96, h * 0.45);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t * 0.96, bY6 + t * 0.84, w - t * 1.92, bH6 - t * 1.70);
+    } else if (digitChar === '7') {
+      ctx.fillRect(0, 0, w, t * 0.94);
+      ctx.beginPath();
+      ctx.moveTo(w, 0);
+      ctx.lineTo(w, t * 1.15);
+      ctx.lineTo(w * 0.22 + t * 1.05, h);
+      ctx.lineTo(w * 0.22, h);
+      ctx.lineTo(w - t * 1.02, t * 0.80);
+      ctx.closePath();
+      ctx.fill();
+    } else if (digitChar === '8') {
+      var topH8 = h * 0.53;
+      var botY8 = h * 0.44;
+      var botH8 = h - botY8;
+      fillStadium(ctx, w * 0.03, 0, w * 0.94, topH8);
+      fillStadium(ctx, 0, botY8, w, botH8);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, w * 0.03 + t * 0.95, t * 0.84, w * 0.94 - t * 1.90, topH8 - t * 1.66);
+      fillStadium(ctx, t * 0.96, botY8 + t * 0.84, w - t * 1.92, botH8 - t * 1.68);
+    } else if (digitChar === '9') {
+      var topH9 = h * 0.60;
+      fillStadium(ctx, 0, 0, w, h);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t * 0.96, h * 0.38, w - t * 1.92, h * 0.62 - t * 0.88);
+      ctx.fillRect(0, h * 0.30, w * 0.52, h * 0.45);
+      ctx.globalCompositeOperation = 'source-over';
+      fillStadium(ctx, 0, 0, w, topH9);
+      ctx.fillRect(w - t * 0.96, h * 0.30, t * 0.96, h * 0.45);
+      ctx.globalCompositeOperation = 'destination-out';
+      fillStadium(ctx, t * 0.96, t * 0.86, w - t * 1.92, topH9 - t * 1.70);
+    }
+    ctx.restore();
+  }
+
+  /* ---------- Composite Overlay Canvas Renderer ---------- */
+  function renderInfoOverlayCanvas() {
+    if (!infoCanvasEl || !infoCanvasEl.getContext) return;
+    var vp = getViewportSize();
+    var vw = vp.w || 1280;
+    var vh = vp.h || 800;
+    var isPortrait = vh > vw;
+
+    var palette = analyzeSlidePalette(vw, vh);
+    if (infoOverlayEl) {
+      if (palette.alignRight) {
+        infoOverlayEl.classList.add('align-right');
+      } else {
+        infoOverlayEl.classList.remove('align-right');
+      }
+    }
+
+    var digitH = isPortrait
+      ? Math.min(280, Math.max(115, Math.round(vw * 0.34)))
+      : Math.min(240, Math.max(100, Math.round(vh * 0.24)));
+    var digitW = Math.round(digitH * 0.565);
+    var digitGapX = Math.round(digitH * 0.068);
+    var digitGapY = Math.round(digitH * 0.082);
+    var headerFontPx = Math.max(18, Math.round(digitH * 0.178));
+    var headerGapY = Math.round(digitH * 0.145);
+
+    var now = new Date();
+    var h = now.getHours();
+    var m = now.getMinutes();
+    var mStr = (m < 10 ? '0' : '') + m;
+    var hNum = CLOCK_24 ? h : ((h % 12) || 12);
+    var hStr = (hNum < 10 ? '0' : '') + hNum;
+
+    var dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    var tempVal = (cachedWeather && cachedWeather.temp !== undefined && cachedWeather.temp !== null)
+      ? Math.round(cachedWeather.temp)
+      : 70;
+    var tempStr = tempVal + '°';
+    var iconType = (cachedWeather && cachedWeather.icon)
+      ? cachedWeather.icon
+      : getWeatherIconType(cachedWeather && cachedWeather.code, cachedWeather ? cachedWeather.isDay !== false : true, cachedWeather && cachedWeather.condition);
+
+    var dpr = Math.min(window.devicePixelRatio || 1, 2.25);
+    var ctx = infoCanvasEl.getContext('2d');
+    if (!ctx) return;
+
+    var headerFont = '600 ' + headerFontPx + 'px "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif';
+    ctx.font = headerFont;
+    var dateMetrics = ctx.measureText(dateStr);
+    var tempMetrics = ctx.measureText(tempStr);
+    var dateW = (dateMetrics && dateMetrics.width) ? dateMetrics.width : (dateStr.length * headerFontPx * 0.56);
+    var tempW = (tempMetrics && tempMetrics.width) ? tempMetrics.width : (tempStr.length * headerFontPx * 0.62);
+    var iconSize = Math.round(headerFontPx * 0.96);
+    var gapBeforeIcon = Math.round(headerFontPx * 0.36);
+    var gapAfterIcon = Math.round(headerFontPx * 0.16);
+
+    var headerTotalW = Math.ceil(dateW + gapBeforeIcon + iconSize + gapAfterIcon + tempW);
+    var digitsTotalW = digitW * 2 + digitGapX;
+    var pad = Math.ceil(digitH * 0.08);
+    var logicalW = Math.max(headerTotalW, digitsTotalW) + pad * 2;
+    var logicalH = headerFontPx + headerGapY + digitH * 2 + digitGapY + pad * 2;
+
+    var pixelW = Math.ceil(logicalW * dpr);
+    var pixelH = Math.ceil(logicalH * dpr);
+
+    if (infoCanvasEl.width !== pixelW || infoCanvasEl.height !== pixelH) {
+      infoCanvasEl.width = pixelW;
+      infoCanvasEl.height = pixelH;
+      infoCanvasEl.style.width = logicalW + 'px';
+      infoCanvasEl.style.height = logicalH + 'px';
+    }
+
+    if (!maskCanvas && document.createElement) {
+      maskCanvas = document.createElement('canvas');
+      maskCtx = maskCanvas.getContext ? maskCanvas.getContext('2d') : null;
+    }
+    if (!numCanvas && document.createElement) {
+      numCanvas = document.createElement('canvas');
+      numCtx = numCanvas.getContext ? numCanvas.getContext('2d', { willReadFrequently: true }) : null;
+    }
+    if (!backdropCanvas && document.createElement) {
+      backdropCanvas = document.createElement('canvas');
+      backdropCtx = backdropCanvas.getContext ? backdropCanvas.getContext('2d', { willReadFrequently: true }) : null;
+    }
+    if (!maskCtx || !numCtx || !backdropCtx) return;
+
+    if (maskCanvas.width !== pixelW || maskCanvas.height !== pixelH) {
+      maskCanvas.width = pixelW;
+      maskCanvas.height = pixelH;
+    }
+
+    var numPad = Math.ceil(digitH * 0.06 * dpr);
+    var numPixelW = Math.ceil(digitsTotalW * dpr) + numPad * 2;
+    var numPixelH = Math.ceil((digitH * 2 + digitGapY) * dpr) + numPad * 2;
+    if (numCanvas.width !== numPixelW || numCanvas.height !== numPixelH) {
+      numCanvas.width = numPixelW;
+      numCanvas.height = numPixelH;
+    }
+    numCtx.clearRect(0, 0, numPixelW, numPixelH);
+    numCtx.save();
+    numCtx.translate(numPad, numPad);
+    numCtx.scale(dpr, dpr);
+    drawLockscreenDigit(numCtx, hStr.charAt(0), 0, 0, digitW, digitH);
+    drawLockscreenDigit(numCtx, hStr.charAt(1), digitW + digitGapX, 0, digitW, digitH);
+    drawLockscreenDigit(numCtx, mStr.charAt(0), 0, digitH + digitGapY, digitW, digitH);
+    drawLockscreenDigit(numCtx, mStr.charAt(1), digitW + digitGapX, digitH + digitGapY, digitW, digitH);
+    numCtx.restore();
+
+    try {
+      var numImgData = numCtx.getImageData(0, 0, numPixelW, numPixelH);
+      var cornerRadiusPx = Math.max(2, Math.round(digitH * 0.025 * dpr));
+      roundGlyphCornersAlpha(numImgData, numPixelW, numPixelH, cornerRadiusPx);
+      numCtx.putImageData(numImgData, 0, 0);
+    } catch (e) {}
+
+    maskCtx.clearRect(0, 0, pixelW, pixelH);
+    maskCtx.save();
+    maskCtx.scale(dpr, dpr);
+
+    var headerX = palette.alignRight ? (logicalW - pad - headerTotalW) : pad;
+    var headerBaselineY = pad + headerFontPx * 0.84;
+
+    maskCtx.fillStyle = '#ffffff';
+    maskCtx.font = headerFont;
+    maskCtx.textBaseline = 'alphabetic';
+    maskCtx.fillText(dateStr, headerX, headerBaselineY);
+
+    var iconX = headerX + dateW + gapBeforeIcon;
+    var iconY = pad + (headerFontPx - iconSize) * 0.45;
+    drawWeatherIcon(maskCtx, iconType, iconX, iconY, iconSize);
+
+    var tempX = iconX + iconSize + gapAfterIcon;
+    maskCtx.fillStyle = '#ffffff';
+    maskCtx.font = headerFont;
+    maskCtx.textBaseline = 'alphabetic';
+    maskCtx.fillText(tempStr, tempX, headerBaselineY);
+    maskCtx.restore();
+
+    var digitsX = palette.alignRight
+      ? Math.round((logicalW - pad - digitsTotalW) * dpr) - numPad
+      : Math.round(pad * dpr) - numPad;
+    var digitsY = Math.round((pad + headerFontPx + headerGapY) * dpr) - numPad;
+    maskCtx.drawImage(numCanvas, digitsX, digitsY);
+
+    var bW = 96;
+    var bH = Math.max(64, Math.round(96 * (logicalH / Math.max(1, logicalW))));
+    if (backdropCanvas.width !== bW || backdropCanvas.height !== bH) {
+      backdropCanvas.width = bW;
+      backdropCanvas.height = bH;
+    }
+
+    var overlayRect = infoOverlayEl && infoOverlayEl.getBoundingClientRect
+      ? infoOverlayEl.getBoundingClientRect()
+      : { left: vw * 0.065, top: vh * 0.085, width: logicalW, height: logicalH };
+    var ox = overlayRect.left || (palette.alignRight ? (vw - logicalW - vw * 0.065) : (vw * 0.065));
+    var oy = overlayRect.top || (vh * 0.085);
+
+    var marginX = logicalW * 0.18;
+    var marginY = logicalH * 0.18;
+    drawSlideRegionToCanvas(
+      backdropCtx,
+      bW,
+      bH,
+      ox - marginX,
+      oy - marginY,
+      logicalW + marginX * 2,
+      logicalH + marginY * 2
+    );
+
+    try {
+      var bgData = backdropCtx.getImageData(0, 0, bW, bH);
+      blurImageData(bgData, bW, bH, 14);
+
+      var px = bgData.data;
+      var tr = palette.tintRgb[0];
+      var tg = palette.tintRgb[1];
+      var tb = palette.tintRgb[2];
+
+      for (var pIdx = 0; pIdx < px.length; pIdx += 4) {
+        var pr = px[pIdx];
+        var pg = px[pIdx + 1];
+        var pb = px[pIdx + 2];
+
+        var avg = (pr + pg + pb) / 3;
+        var sr = Math.min(255, Math.max(0, avg + (pr - avg) * 1.55));
+        var sg = Math.min(255, Math.max(0, avg + (pg - avg) * 1.55));
+        var sb = Math.min(255, Math.max(0, avg + (pb - avg) * 1.55));
+
+        var liftedR = sr * 0.56 + 245 * 0.44;
+        var liftedG = sg * 0.56 + 245 * 0.44;
+        var liftedB = sb * 0.56 + 245 * 0.44;
+
+        px[pIdx] = Math.round(liftedR * 0.42 + tr * 0.58);
+        px[pIdx + 1] = Math.round(liftedG * 0.42 + tg * 0.58);
+        px[pIdx + 2] = Math.round(liftedB * 0.42 + tb * 0.58);
+        px[pIdx + 3] = 255;
+      }
+      backdropCtx.putImageData(bgData, 0, 0);
+    } catch (e) {}
+
+    ctx.clearRect(0, 0, pixelW, pixelH);
+
+    if (palette.localLum > 0.62) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.28, (palette.localLum - 0.60) * 0.75);
+      ctx.filter = 'blur(' + Math.round(8 * dpr) + 'px)';
+      ctx.drawImage(maskCanvas, 0, Math.round(2 * dpr));
+      ctx.globalCompositeOperation = 'source-in';
+      ctx.fillStyle = '#090a0f';
+      ctx.fillRect(0, 0, pixelW, pixelH);
+      ctx.restore();
+    }
+
+    ctx.save();
+    var srcCropX = bW * (marginX / (logicalW + marginX * 2));
+    var srcCropY = bH * (marginY / (logicalH + marginY * 2));
+    var srcCropW = bW - srcCropX * 2;
+    var srcCropH = bH - srcCropY * 2;
+    ctx.drawImage(backdropCanvas, srcCropX, srcCropY, srcCropW, srcCropH, 0, 0, pixelW, pixelH);
+
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(maskCanvas, 0, 0);
+    ctx.restore();
+  }
+
+  function onSlideChangedForOverlay() {
+    renderInfoOverlayCanvas();
+    if (infoOverlayEl && infoOverlayEl.classList.contains('visible')) {
+      var start = Date.now();
+      if (infoTransitionRaf) clearInterval(infoTransitionRaf);
+      infoTransitionRaf = setInterval(function () {
+        renderInfoOverlayCanvas();
+        if (Date.now() - start > 1900) {
+          clearInterval(infoTransitionRaf);
+          infoTransitionRaf = null;
+        }
+      }, 120);
+    }
+  }
+
   function updateClock() {
     var now = new Date();
     var timeEl = document.getElementById('info-time');
     var dateEl = document.getElementById('info-date');
-    if (!timeEl || !dateEl) return;
 
     var h = now.getHours();
     var m = now.getMinutes();
     var mStr = (m < 10 ? '0' : '') + m;
+    var hNum = CLOCK_24 ? h : ((h % 12) || 12);
+    var hStr = (hNum < 10 ? '0' : '') + hNum;
 
-    if (CLOCK_24) {
-      var hStr = (h < 10 ? '0' : '') + h;
-      timeEl.innerHTML = hStr + ':' + mStr;
-    } else {
-      var ampm = h >= 12 ? 'PM' : 'AM';
-      var h12 = h % 12;
-      if (h12 === 0) h12 = 12;
-      timeEl.innerHTML = h12 + ':' + mStr + ' <span class="info-ampm">' + ampm + '</span>';
+    if (timeEl) {
+      timeEl.innerHTML = '<span class="info-hour">' + hStr + '</span><span class="info-min">' + mStr + '</span>';
     }
-
-    var options = { weekday: 'long', month: 'long', day: 'numeric' };
-    dateEl.textContent = now.toLocaleDateString('en-US', options);
+    if (dateEl) {
+      dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    renderInfoOverlayCanvas();
   }
 
   function showInfoOverlay() {
@@ -1703,10 +2636,11 @@
     }
     if (!infoOverlayEl) return;
 
-    updateClock();
     if (cachedWeather) {
       renderWeatherUI(cachedWeather);
     }
+    updateClock();
+
     if (!lastWeatherFetchTime || (Date.now() - lastWeatherFetchTime > 15 * 60 * 1000)) {
       fetchWeather(activeLat, activeLon);
     }
@@ -1739,6 +2673,10 @@
     if (infoClockTicker) {
       clearInterval(infoClockTicker);
       infoClockTicker = null;
+    }
+    if (infoTransitionRaf) {
+      clearInterval(infoTransitionRaf);
+      infoTransitionRaf = null;
     }
   }
 
@@ -1781,7 +2719,6 @@
     var deltaY = e.clientY - pointerStartY;
     var elapsed = Date.now() - pointerStartTime;
 
-    // Horizontal swipe to advance/reverse slides (deliberate swipe > 60px within 600ms)
     if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 600) {
       if (deltaX < 0) {
         next();
@@ -1794,12 +2731,9 @@
       return;
     }
 
-    // Touch/tap displays the minimalist date, time, and weather overlay
-    // The slideshow continues running in the background uninterrupted
     showInfoOverlay();
   });
 
-  // Keyboard navigation bonus for accessibility, desktop controls, and testing
   document.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
       next();
@@ -1866,9 +2800,11 @@
         return infoOverlayEl ? infoOverlayEl.classList.contains('visible') : false;
       },
       getInfoOverlayEl: function () { return infoOverlayEl; },
+      getInfoPalette: function () { return currentPalette; },
       getCachedWeather: function () { return cachedWeather; },
       fetchWeather: fetchWeather,
       renderWeatherUI: renderWeatherUI,
+      renderInfoOverlayCanvas: renderInfoOverlayCanvas,
       updateClock: updateClock
     };
   }
