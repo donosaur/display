@@ -21,11 +21,14 @@
   .slide.visible { opacity: 1; }
   .cell {
     width: 100%; height: 100%;
-    background-position: center; background-repeat: no-repeat;
     position: relative;
+    overflow: hidden;
   }
-  .cell.cover {
-    background-size: cover;
+  .cell img.slide-img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
   }
   .pair-container {
     display: flex; width: 100%; height: 100%; background: #000;
@@ -50,7 +53,13 @@
   }
   .leftover-container .foreground {
     position: absolute; inset: 0;
-    background-size: contain; background-position: center; background-repeat: no-repeat;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .leftover-container .foreground img.slide-img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    object-position: center;
+    display: block;
   }
   #fsbtn {
     position: fixed; bottom: 1.5vh; left: 2vw; z-index: 5;
@@ -455,13 +464,26 @@
     return allSlides;
   }
 
-  function renderSlide(slideEl, slide, va) {
+  function renderSlide(slideEl, slide, va, images) {
     slideEl.innerHTML = '';
     if (!slide || !slide.photos.length) return;
     if (slide.type === 'single') {
       var cell = document.createElement('div');
-      cell.className = 'cell cover';
-      cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      cell.className = 'cell';
+      var img = (images && images[0]) ? images[0] : null;
+      if (!img && slide.photos[0]) {
+        img = new Image();
+        img.src = photoSrc(slide.photos[0]);
+      }
+      if (img) {
+        img.className = 'slide-img';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.objectPosition = 'center';
+        img.style.display = 'block';
+        cell.appendChild(img);
+      }
       if (DEBUG) {
         var b = createDebugBadge(slide.photos[0], va);
         if (b) cell.appendChild(b);
@@ -472,8 +494,21 @@
       container.className = 'pair-container ' + (va < 1 ? 'portrait-split' : 'landscape-split');
       for (var i = 0; i < slide.photos.length; i++) {
         var cell = document.createElement('div');
-        cell.className = 'cell cover';
-        cell.style.backgroundImage = 'url("' + photoSrc(slide.photos[i]) + '")';
+        cell.className = 'cell';
+        var img = (images && images[i]) ? images[i] : null;
+        if (!img && slide.photos[i]) {
+          img = new Image();
+          img.src = photoSrc(slide.photos[i]);
+        }
+        if (img) {
+          img.className = 'slide-img';
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          img.style.objectPosition = 'center';
+          img.style.display = 'block';
+          cell.appendChild(img);
+        }
         if (DEBUG) {
           var b = createDebugBadge(slide.photos[i], va, slide.score);
           if (b) cell.appendChild(b);
@@ -489,7 +524,20 @@
       bg.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
       var fg = document.createElement('div');
       fg.className = 'foreground';
-      fg.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      var img = (images && images[0]) ? images[0] : null;
+      if (!img && slide.photos[0]) {
+        img = new Image();
+        img.src = photoSrc(slide.photos[0]);
+      }
+      if (img) {
+        img.className = 'slide-img';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        img.style.objectPosition = 'center';
+        img.style.display = 'block';
+        fg.appendChild(img);
+      }
       container.appendChild(bg);
       container.appendChild(fg);
       if (DEBUG) {
@@ -521,8 +569,8 @@
     var seq = ++showSeq;
 
     var loadPromises = targetSlide.photos.map(function (p) {
-      return loadImage(photoSrc(p)).then(function () {
-        return { photo: p, ok: true };
+      return loadImage(photoSrc(p)).then(function (img) {
+        return { photo: p, img: img, ok: true };
       }).catch(function (err) {
         return { photo: p, ok: false, err: err };
       });
@@ -580,10 +628,15 @@
       if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
       globalSuccessLoads += results.length;
 
+      var loadedImages = results.map(function (r) { return r.img; });
+      targetSlide._images = loadedImages;
+
       slideIdx = curIdx;
       var back = 1 - front;
       var vp = getViewportSize();
-      renderSlide(slides[back], targetSlide, vp.va);
+      slides[back]._images = null;
+      renderSlide(slides[back], targetSlide, vp.va, loadedImages);
+      slides[back]._images = loadedImages;
       void slides[back].offsetWidth;
       slides[back].classList.add('visible');
       slides[front].classList.remove('visible');
@@ -827,7 +880,8 @@
       lastIsPortrait = isPortrait;
     }
 
-    renderSlide(slides[front], slideQueue[slideIdx], vp.va);
+    var curSlide = slideQueue[slideIdx];
+    renderSlide(slides[front], curSlide, vp.va, curSlide ? curSlide._images : null);
     scheduleNext();
   }
   function onResize() {
