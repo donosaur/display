@@ -53,11 +53,16 @@ def load_env_file():
 
 load_env_file()
 
-PHOTOS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "photos")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SITE_DIR = os.path.join(BASE_DIR, "site")
+SITE_PHOTOS_DIR = os.path.join(SITE_DIR, "photos")
+ROOT_PHOTOS_DIR = os.path.join(BASE_DIR, "photos")
+
+PHOTOS_DIR = SITE_PHOTOS_DIR if os.path.isdir(SITE_PHOTOS_DIR) else ROOT_PHOTOS_DIR
 MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
-DEBUG_MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.debug.json")
-TAGS_CACHE_PATH = os.path.join(PHOTOS_DIR, ".tags-cache.json")
-OVERRIDES_PATH = os.path.join(PHOTOS_DIR, "overrides.json")
+DEBUG_MANIFEST_PATH = os.path.join(ROOT_PHOTOS_DIR, "photos.debug.json")
+TAGS_CACHE_PATH = os.path.join(ROOT_PHOTOS_DIR, ".tags-cache.json")
+OVERRIDES_PATH = os.path.join(ROOT_PHOTOS_DIR, "overrides.json")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 # Pair scoring weights (constants for tuning)

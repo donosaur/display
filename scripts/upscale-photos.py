@@ -23,11 +23,15 @@ from PIL import Image
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.dirname(SCRIPT_DIR)
-PHOTOS_DIR = os.path.join(REPO_DIR, "photos")
-ORIGINALS_DIR = os.path.join(PHOTOS_DIR, "originals")
-COMPARISONS_DIR = os.path.join(PHOTOS_DIR, "comparisons")
+SITE_DIR = os.path.join(REPO_DIR, "site")
+SITE_PHOTOS_DIR = os.path.join(SITE_DIR, "photos")
+ROOT_PHOTOS_DIR = os.path.join(REPO_DIR, "photos")
+
+PHOTOS_DIR = SITE_PHOTOS_DIR if os.path.isdir(SITE_PHOTOS_DIR) else ROOT_PHOTOS_DIR
+ORIGINALS_DIR = os.path.join(ROOT_PHOTOS_DIR, "originals")
+COMPARISONS_DIR = os.path.join(ROOT_PHOTOS_DIR, "comparisons")
 MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
-REPORT_PATH = os.path.join(PHOTOS_DIR, "quality-report.json")
+REPORT_PATH = os.path.join(ROOT_PHOTOS_DIR, "quality-report.json")
 
 
 def load_candidates(tier=None, limit=None):

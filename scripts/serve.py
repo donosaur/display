@@ -16,15 +16,46 @@ import sys
 import urllib.parse
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PHOTOS_DIR = os.path.join(BASE_DIR, "photos")
-OVERRIDES_PATH = os.path.join(PHOTOS_DIR, "overrides.json")
+SITE_DIR = os.path.join(BASE_DIR, "site")
+SITE_PHOTOS_DIR = os.path.join(SITE_DIR, "photos")
+ROOT_PHOTOS_DIR = os.path.join(BASE_DIR, "photos")
+OVERRIDES_PATH = os.path.join(ROOT_PHOTOS_DIR, "overrides.json")
 VENV_PYTHON = os.path.join(BASE_DIR, ".venv", "bin", "python3")
 SYNC_SCRIPT = os.path.join(BASE_DIR, "scripts", "sync-photos.py")
 
 
 class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=BASE_DIR, **kwargs)
+        super().__init__(*args, directory=SITE_DIR, **kwargs)
+
+    def translate_path(self, path):
+        clean_path = urllib.parse.urlparse(path).path
+        clean_path = posixpath.normpath(urllib.parse.unquote(clean_path))
+
+        # Direct tool endpoints or /tools/<tool>.html
+        if clean_path.startswith("/tools/"):
+            sub = clean_path[len("/tools/"):].lstrip("/")
+            if sub.startswith("photos/"):
+                clean_path = "/" + sub
+            else:
+                return os.path.join(BASE_DIR, sub)
+
+        if clean_path in ("/pairs.html", "/review.html", "/compare.html"):
+            return os.path.join(BASE_DIR, clean_path.lstrip("/"))
+
+        if clean_path.startswith("/photos/"):
+            rel_photo = clean_path[len("/photos/"):].lstrip("/")
+            # Check site/photos first (images and photos.json)
+            site_photo_path = os.path.join(SITE_PHOTOS_DIR, rel_photo)
+            if os.path.exists(site_photo_path):
+                return site_photo_path
+            # Check root photos/ (comparisons, overrides.json, quality-report.json, photos.debug.json)
+            root_photo_path = os.path.join(ROOT_PHOTOS_DIR, rel_photo)
+            if os.path.exists(root_photo_path):
+                return root_photo_path
+            return site_photo_path
+
+        return os.path.join(SITE_DIR, clean_path.lstrip("/"))
 
     def _is_path_forbidden(self, raw_path):
         url_path = urllib.parse.urlparse(raw_path).path
@@ -35,9 +66,11 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
             if seg.startswith("."):
                 return True
         if segments:
-            if segments[0] == "scripts":
+            if segments[0] == "scripts" or (len(segments) >= 2 and segments[0] == "tools" and segments[1] == "scripts"):
                 return True
             if len(segments) >= 2 and segments[0] == "photos" and segments[1] == "originals":
+                return True
+            if len(segments) >= 3 and segments[0] == "tools" and segments[1] == "photos" and segments[2] == "originals":
                 return True
         return False
 
@@ -194,9 +227,9 @@ def run(port=8088, host="127.0.0.1"):
         display_host = "localhost" if host == "127.0.0.1" else (host if host != "0.0.0.0" else "0.0.0.0")
         print(f"Display Kiosk Review Server running at http://{display_host}:{port}/ (bound to {host})")
         print(f"  - Kiosk Slideshow:  http://{display_host}:{port}/")
-        print(f"  - Pairing Review:   http://{display_host}:{port}/pairs.html")
-        print(f"  - Photo Review:     http://{display_host}:{port}/review.html")
-        print(f"  - Upscale Compare:  http://{display_host}:{port}/compare.html")
+        print(f"  - Pairing Review:   http://{display_host}:{port}/tools/pairs.html (or /pairs.html)")
+        print(f"  - Photo Review:     http://{display_host}:{port}/tools/review.html (or /review.html)")
+        print(f"  - Upscale Compare:  http://{display_host}:{port}/tools/compare.html (or /compare.html)")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

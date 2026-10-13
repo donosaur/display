@@ -801,7 +801,7 @@
   </div>
 
   <nav class="nav-group">
-    <a href="index.html" class="nav-link">&larr; Slideshow</a>
+    <a href="/" class="nav-link">&larr; Slideshow</a>
     <a href="review.html" class="nav-link">Photo Review</a>
     <a href="compare.html" class="nav-link">Compare Upscales</a>
   </nav>
@@ -991,8 +991,8 @@
         updateSaveStatus('Synced with server');
       })
       .catch(function () {
-        // Fallback to static photos/overrides.json or local storage
-        return fetch('photos/overrides.json')
+        // Fallback to static /photos/overrides.json or local storage
+        return fetch('/photos/overrides.json')
           .then(function (res) { return res.ok ? res.json() : null; })
           .catch(function () { return null; })
           .then(function (fileData) {
@@ -1483,7 +1483,7 @@
       var frame1 = document.createElement('div');
       frame1.className = 'photo-frame';
       var img1 = document.createElement('img');
-      img1.src = 'photos/' + pair.p1.f;
+      img1.src = '/photos/' + pair.p1.f;
       img1.loading = 'lazy';
       img1.alt = pair.p1.f;
       frame1.appendChild(img1);
@@ -1504,7 +1504,7 @@
       var frame2 = document.createElement('div');
       frame2.className = 'photo-frame';
       var img2 = document.createElement('img');
-      img2.src = 'photos/' + pair.p2.f;
+      img2.src = '/photos/' + pair.p2.f;
       img2.loading = 'lazy';
       img2.alt = pair.p2.f;
       frame2.appendChild(img2);
@@ -1767,7 +1767,7 @@
   // Initialization
   loadOverrides()
     .then(function () {
-      return fetch('photos/photos.json');
+      return fetch('/photos/photos.json');
     })
     .then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);

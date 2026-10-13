@@ -438,6 +438,7 @@
 <header class="bar">
   <div class="brand-group">
     <h1>Photo Review</h1>
+    <a href="/" style="font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 3px 8px; border-radius: 4px;">&larr; Slideshow</a>
     <a href="pairs.html" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Review Pairings &rarr;</a>
     <a href="compare.html" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Compare Upscales &rarr;</a>
     <div id="stats" class="stats">Loading...</div>
@@ -677,7 +678,7 @@
       header.className = 'card-header';
       var fnLink = document.createElement('a');
       fnLink.className = 'card-filename';
-      fnLink.href = 'photos/' + p.f;
+      fnLink.href = '/photos/' + p.f;
       fnLink.target = '_blank';
       var maxDim = Math.max(p.w, p.h);
       var mp = ((p.w * p.h) / 1000000).toFixed(1);
@@ -698,7 +699,7 @@
       var thumbWrap = document.createElement('div');
       thumbWrap.className = 'thumb-wrap';
       var img = document.createElement('img');
-      img.src = 'photos/' + p.f;
+      img.src = '/photos/' + p.f;
       img.loading = 'lazy';
       img.alt = p.f;
       thumbWrap.appendChild(img);
@@ -826,7 +827,7 @@
 
           var pimg = document.createElement('img');
           pimg.className = 'partner-thumb';
-          pimg.src = 'photos/' + pfn;
+          pimg.src = '/photos/' + pfn;
           pimg.loading = 'lazy';
           pimg.alt = pfn;
           row.appendChild(pimg);
@@ -868,7 +869,7 @@
     gridEl.appendChild(fragment);
   }
 
-  fetch('photos/photos.json')
+  fetch('/photos/photos.json')
     .then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
