@@ -1,10 +1,10 @@
 {
-  "total_photos": 298,
+  "total_photos": 293,
   "tier_counts": {
     "CRITICAL": 0,
     "NEEDS_UPSCALE": 0,
     "MARGINAL": 10,
-    "GOOD": 288
+    "GOOD": 283
   },
   "candidates_count": 0,
   "photos": [
@@ -945,24 +945,6 @@
       "tags": null
     },
     {
-      "filename": "f8330690af.jpg",
-      "width": 864,
-      "height": 1080,
-      "longest_edge": 1080,
-      "shortest_edge": 864,
-      "aspect_ratio": 0.8,
-      "megapixels": 0.93,
-      "size_kb": 108.7,
-      "bytes_per_pixel": 0.119,
-      "laplacian_var": 203.8,
-      "tier": "GOOD",
-      "reason": "Meets or exceeds display baseline",
-      "quality_score": 84.7,
-      "date": null,
-      "caption": null,
-      "tags": null
-    },
-    {
       "filename": "d34f8e6747.jpg",
       "width": 864,
       "height": 1080,
@@ -995,24 +977,6 @@
       "reason": "Meets or exceeds display baseline",
       "quality_score": 85.0,
       "date": "2015-03-04T15:02:43",
-      "caption": null,
-      "tags": null
-    },
-    {
-      "filename": "02fe88b041.jpg",
-      "width": 2448,
-      "height": 2448,
-      "longest_edge": 2448,
-      "shortest_edge": 2448,
-      "aspect_ratio": 1.0,
-      "megapixels": 5.99,
-      "size_kb": 1383.6,
-      "bytes_per_pixel": 0.236,
-      "laplacian_var": 23.9,
-      "tier": "GOOD",
-      "reason": "Meets or exceeds display baseline",
-      "quality_score": 85.1,
-      "date": null,
       "caption": null,
       "tags": null
     },
@@ -3177,24 +3141,6 @@
       "tags": null
     },
     {
-      "filename": "b519110580.jpg",
-      "width": 864,
-      "height": 1080,
-      "longest_edge": 1080,
-      "shortest_edge": 864,
-      "aspect_ratio": 0.8,
-      "megapixels": 0.93,
-      "size_kb": 224.4,
-      "bytes_per_pixel": 0.246,
-      "laplacian_var": 2663.3,
-      "tier": "GOOD",
-      "reason": "Meets or exceeds display baseline",
-      "quality_score": 99.7,
-      "date": null,
-      "caption": null,
-      "tags": null
-    },
-    {
       "filename": "b9aafe0e02.jpg",
       "width": 1920,
       "height": 1280,
@@ -3825,24 +3771,6 @@
       "tags": null
     },
     {
-      "filename": "5448d2c568.jpg",
-      "width": 864,
-      "height": 1080,
-      "longest_edge": 1080,
-      "shortest_edge": 864,
-      "aspect_ratio": 0.8,
-      "megapixels": 0.93,
-      "size_kb": 269.1,
-      "bytes_per_pixel": 0.295,
-      "laplacian_var": 1704.8,
-      "tier": "GOOD",
-      "reason": "Meets or exceeds display baseline",
-      "quality_score": 100.0,
-      "date": null,
-      "caption": null,
-      "tags": null
-    },
-    {
       "filename": "58cbc47de5.jpg",
       "width": 813,
       "height": 1080,
@@ -3871,24 +3799,6 @@
       "size_kb": 304.8,
       "bytes_per_pixel": 0.334,
       "laplacian_var": 4189.3,
-      "tier": "GOOD",
-      "reason": "Meets or exceeds display baseline",
-      "quality_score": 100.0,
-      "date": null,
-      "caption": null,
-      "tags": null
-    },
-    {
-      "filename": "59d579137c.jpg",
-      "width": 864,
-      "height": 1080,
-      "longest_edge": 1080,
-      "shortest_edge": 864,
-      "aspect_ratio": 0.8,
-      "megapixels": 0.93,
-      "size_kb": 321.8,
-      "bytes_per_pixel": 0.353,
-      "laplacian_var": 3925.0,
       "tier": "GOOD",
       "reason": "Meets or exceeds display baseline",
       "quality_score": 100.0,

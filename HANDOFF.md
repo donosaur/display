@@ -1,6 +1,6 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat: replace 58 low-resolution photos with AI-upscaled versions (antigravity, 2026-10-12 23:14 EDT)
+- Last save (MBP M3): feat: prune 5 duplicate photos keeping highest quality versions (antigravity, 2026-10-12 23:29 EDT)
 - Completed:
   - Fixed resize resetting to slide 0 bug in `handleResize()` using a `found` flag, avoided unnecessary queue rebuilds when pairable flags are unchanged, incremented `showSeq`, and rescheduled auto-advance timer.
   - Handled transient photo failures gracefully without dropping from `photos`: tracked failures per photo in map, skipped failed photos for remainder of round, only permanently removed after 3 online failures with intervening success, and added 3-in-a-row network outage hold with 30s retries.
@@ -13,10 +13,11 @@
   - Simplified sync script environment setup by removing `sys.path` venv injection, added `scripts/requirements.txt`, supported repo-local `.env` file for `ANTHROPIC_API_KEY`, and added `.env` to `.gitignore`.
   - Cleaned up cache rules in `netlify.toml` for `.jpeg/.png/.webp`, restricted `window.__kiosk` to `?debug=1`, re-requested screen wake lock on release when visible, and consolidated crop loss calculation into `losses(img, va)`.
   - Pruned 23 additional photos removed from Google Photos album in round 2, updating `photos.json` manifest down from 321 to 298 photos.
+  - Replaced 58 low-resolution photos with AI-upscaled versions (backing up originals in `photos/originals/`), verifying 0 of the 74 previously pruned photos were restored.
+  - Identified 5 duplicate photo pairs via DCT perceptual hashing and Laplacian sharpness audits; pruned the 5 lower-quality duplicates (`59d579137c.jpg`, `b519110580.jpg`, `f8330690af.jpg`, `02fe88b041.jpg`, `5448d2c568.jpg`) and kept the dated, sharper, higher-resolution masters, reducing manifest count from 298 to 293 photos.
 - In flight: none.
 - Inbound: none.
 - Next:
   - Run sync with Google Takeout folder once exported to populate remaining dates and GPS coordinates.
-  - Set `ANTHROPIC_API_KEY` to populate visual tags across all 298 photos.
+  - Set `ANTHROPIC_API_KEY` to populate visual tags across all 293 photos.
   - Test on real Echo Show 15 to verify idle timeout behavior (default muted vs `?audio=unmuted`) and record confirmed mode in README.
-  - Optionally swap in higher-resolution originals for the 58 flagged low-res images in `photos/`.

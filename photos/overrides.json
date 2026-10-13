@@ -1,5 +1,19 @@
 {
-  "always_pair": [],
-  "never_pair": [],
+  "always_pair": [
+    [
+      "5828f3b0b8.jpg",
+      "9be860e116.jpg"
+    ]
+  ],
+  "never_pair": [
+    [
+      "16df09b0ea.jpg",
+      "7e8cb7542a.jpg"
+    ],
+    [
+      "9b83482d6d.jpg",
+      "d9d0a318a0.jpg"
+    ]
+  ],
   "tags": {}
 }
