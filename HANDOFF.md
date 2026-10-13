@@ -1,22 +1,20 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat: prune 51 removed photos from album and manifest (antigravity, 2026-10-12 19:41 EDT)
+- Last save (MBP M3): docs: document new sync flow, scoring weights, overrides, and review tool (antigravity, 2026-10-12 21:15 EDT)
 - Completed:
-  - Added dimensions to `photos.json` manifest via `scripts/sync-photos.py`, content-hashed all 372 photos (first 10 hex characters of SHA1), parsed EXIF orientations, and reported 86 images under 1080px longest edge.
-  - Configured caching headers in `netlify.toml` with `no-cache` for HTML and manifest, and immutable long cache for `/photos/*.jpg`.
-  - Implemented responsive orientation pairing layout with crop loss calculation, stacking top/bottom in portrait (va < 1) and side-by-side in landscape (va >= 1) with 3px dividers, and blurred backdrop fallback for leftover pairable photos.
-  - Debounced dynamic queue reflow on resize and orientationchange while keeping current photo in view.
-  - Image pre-decoding via `img.decode()` with error recovery that drops broken photos without fading to black.
-  - Consolidated gesture handling to a single `pointerup` handler so first touch arms without advancing.
-  - Replaced interval with setTimeout chain restarted on advance, with paired slides holding 1.5× longer.
-  - Eliminated wake lock churn and deleted legacy clock/badge code.
-  - Removed 372-entry inline fallback list and added retry with backoff and status note.
-  - Added queue reshuffling on wrap preventing repeat of last slide, and scheduled nightly reload at 4:00 AM.
-  - Added `?audio=unmuted` testing mode and full URL-param configuration (`interval`, `pairhold`, `shuffle`, `layout`, `debug`).
-  - Pruned 51 photos removed from the Google Photos album, updated `photos.json` manifest down to 321 photos.
-  - Rewrote documentation in `README.md`.
+  - Extended `scripts/sync-photos.py` with optional `--takeout <dir>` support to match Google Takeout files by SHA1 and perceptual hash, extracting `photoTakenTime` and `geoData` from sidecars with EXIF fallback.
+  - Added visual tagging step via Claude API using `ANTHROPIC_API_KEY` (configurable model, default `claude-3-5-haiku-20241022`) with strict JSON fixed vocabulary (`scene`, `subjects`, `people_count`, `mood`, `time_of_day`, `is_bw`, `event_hint`, `caption`), concurrency 4, retry/backoff on 429/5xx, and `.tags-cache.json` caching.
+  - Implemented offline local image feature extraction using Pillow and numpy: relative luminance (`luma`), saturation (`sat`), warmth (`warmth`), 3-color palette via k-means, and 64-bit DCT perceptual hash (`phash`).
+  - Precomputed pairwise compatibility scoring (0..1) with configurable weights (same day +0.40, within 3 days +0.25, same month +0.10, geo within 2km +0.15, event +0.10, scene +0.10, subjects Jaccard x0.15, Lab color compatibility x0.15), hard penalties (phash distance <= 10, b&w vs color mismatch, screenshots), soft contrast penalty, and top 10 partners stored in compact `photos.json` and human-readable `photos.debug.json`.
+  - Rewrote pairing in `buildSlideQueue()` in `index.html` to pick partners from precomputed partner lists using random top-3 weighted selection, with leftover matching and fallback passes, plus calendar date spreading to prevent consecutive slides from the same event.
+  - Enhanced debug overlay (`?debug=1`) to display capture date, caption, tags, and pair score for paired slides.
+  - Added standalone `review.html` for desktop inspection of photo metadata, captions, tags, dates, and top 3 partners with interactive tag and no-date filtering.
+  - Added manual overrides support via `photos/overrides.json` for custom tags, `always_pair` (pins score to 1.0 at top of both partner lists), and `never_pair` (sets score to 0).
+  - Documented complete architecture, scoring weights, overrides, review tool, and workflows in `README.md`.
 - In flight: none.
 - Inbound: none.
 - Next:
+  - Run sync with Google Takeout folder once exported to populate remaining 142 dates and GPS coordinates.
+  - Set `ANTHROPIC_API_KEY` to populate visual tags across all 321 photos.
   - Test on real Echo Show 15 to verify idle timeout behavior (default muted vs `?audio=unmuted`) and record confirmed mode in README.
-  - Optionally swap in higher-resolution originals for the 86 flagged low-res images in `photos/`.
+  - Optionally swap in higher-resolution originals for the 66 flagged low-res images in `photos/`.
