@@ -1163,26 +1163,50 @@ def sync_photos(takeout_dir=None, retag=False):
     print(f"\nWrote {len(manifest)} photos to compact {MANIFEST_PATH} and debug {DEBUG_MANIFEST_PATH}.")
 
     # 10. Update build version meta tag in index.html
-    index_html_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "index.html")
-    if os.path.isfile(index_html_path):
-        build_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidate_paths = [
+        os.path.join(base_dir, "site", "index.html"),
+        os.path.join(base_dir, "index.html"),
+    ]
+    index_html_path = next((p for p in candidate_paths if os.path.isfile(p)), None)
+    if index_html_path:
         with open(index_html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
+
+        html_for_hash = re.sub(r'<meta\s+name=["\']build["\']\s+content=["\'][^"\']*["\']\s*/?>\n?', '', html_content)
+        sw_candidate_paths = [
+            os.path.join(os.path.dirname(index_html_path), "sw.js"),
+            os.path.join(base_dir, "site", "sw.js"),
+            os.path.join(base_dir, "sw.js"),
+        ]
+        sw_js_path = next((p for p in sw_candidate_paths if p and os.path.isfile(p)), None)
+        sw_content = ""
+        if sw_js_path:
+            with open(sw_js_path, "r", encoding="utf-8") as sf:
+                sw_content = sf.read()
+
+        combined = (html_for_hash.strip() + "\n" + sw_content.strip()).encode("utf-8")
+        build_hash = hashlib.sha256(combined).hexdigest()[:10]
+
         if re.search(r'<meta\s+name=["\']build["\']', html_content):
-            html_content = re.sub(
-                r'<meta\s+name=["\']build["\']\s+content=["\'][^"\']*["\']',
-                f'<meta name="build" content="{build_timestamp}">',
+            new_html_content = re.sub(
+                r'<meta\s+name=["\']build["\']\s+content=["\'][^"\']*["\']\s*/?>',
+                f'<meta name="build" content="{build_hash}">',
                 html_content
             )
         else:
-            html_content = re.sub(
+            new_html_content = re.sub(
                 r'(<meta\s+name=["\']viewport["\'][^>]*>)',
-                f'\\1\n<meta name="build" content="{build_timestamp}">',
+                f'\\1\n<meta name="build" content="{build_hash}">',
                 html_content
             )
-        with open(index_html_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print(f"Updated index.html build version to {build_timestamp}.")
+
+        if new_html_content != html_content:
+            with open(index_html_path, "w", encoding="utf-8") as f:
+                f.write(new_html_content)
+            print(f"Updated index.html build version to {build_hash}.")
+        else:
+            print(f"index.html build version unchanged ({build_hash}).")
 
     # 10. Print date and location summary
     total = len(manifest)
