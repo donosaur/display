@@ -154,25 +154,54 @@
   function loadImage(src) {
     return new Promise(function (resolve, reject) {
       if (!src) { reject(new Error('Empty src')); return; }
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          reject(new Error('Image load timed out: ' + src));
+        }
+      }, 20000);
+
       var img = new Image();
+
+      function onOk() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(img);
+      }
+
+      function onErr() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error('Image failed to load: ' + src));
+      }
+
+      function cleanup() {
+        clearTimeout(timer);
+        img.onload = null;
+        img.onerror = null;
+      }
+
+      img.onload = onOk;
+      img.onerror = onErr;
       img.src = src;
+
       if (typeof img.decode === 'function') {
         img.decode().then(function () {
-          resolve(img);
+          onOk();
         }).catch(function () {
-          img.onload = function () { resolve(img); };
-          img.onerror = function () { reject(new Error('Image failed to load: ' + src)); };
           if (img.complete) {
-            if (img.naturalWidth > 0) resolve(img);
-            else reject(new Error('Image failed to load: ' + src));
+            if (img.naturalWidth > 0) onOk();
+            else onErr();
           }
         });
       } else {
-        img.onload = function () { resolve(img); };
-        img.onerror = function () { reject(new Error('Image failed to load: ' + src)); };
         if (img.complete) {
-          if (img.naturalWidth > 0) resolve(img);
-          else reject(new Error('Image failed to load: ' + src));
+          if (img.naturalWidth > 0) onOk();
+          else onErr();
         }
       }
     });
@@ -468,8 +497,21 @@
   }
 
   var showSeq = 0;
+  var lastSlideChangeTime = Date.now();
+  function getLongestSlideDuration() {
+    return Math.round(SLIDE_MS * Math.max(1, PAIR_HOLD));
+  }
+
   function show(targetIdx) {
-    if (!slideQueue.length) return;
+    if (!slideQueue.length) {
+      if (slideTimer) { clearTimeout(slideTimer); slideTimer = null; }
+      if (retryTimer) { clearTimeout(retryTimer); }
+      retryTimer = setTimeout(function () {
+        if (!photos.length) loadManifest();
+        else show(0);
+      }, 30000);
+      return;
+    }
     var curIdx = ((targetIdx % slideQueue.length) + slideQueue.length) % slideQueue.length;
     var targetSlide = slideQueue[curIdx];
     var seq = ++showSeq;
@@ -542,6 +584,7 @@
       slides[back].classList.add('visible');
       slides[front].classList.remove('visible');
       front = back;
+      lastSlideChangeTime = Date.now();
 
       // Preload next slide images in the background
       var nextSlide = slideQueue[(slideIdx + 1) % slideQueue.length];
@@ -568,6 +611,16 @@
       next();
     }, duration);
   }
+
+  // Watchdog: if no slide has changed in 3× the longest slide duration and document is visible, call next()
+  setInterval(function () {
+    if (document.visibilityState !== 'visible') return;
+    var maxDuration = getLongestSlideDuration();
+    if (Date.now() - lastSlideChangeTime > 3 * maxDuration) {
+      lastSlideChangeTime = Date.now();
+      next();
+    }
+  }, 5000);
 
   var lastVa = null;
   var lastIsPortrait = null;
