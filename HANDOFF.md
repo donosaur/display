@@ -1,6 +1,6 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat: prune 23 photos from album and manifest (round 2) (antigravity, 2026-10-12 23:07 EDT)
+- Last save (MBP M3): feat: replace 58 low-resolution photos with AI-upscaled versions (antigravity, 2026-10-12 23:14 EDT)
 - Completed:
   - Fixed resize resetting to slide 0 bug in `handleResize()` using a `found` flag, avoided unnecessary queue rebuilds when pairable flags are unchanged, incremented `showSeq`, and rescheduled auto-advance timer.
   - Handled transient photo failures gracefully without dropping from `photos`: tracked failures per photo in map, skipped failed photos for remainder of round, only permanently removed after 3 online failures with intervening success, and added 3-in-a-row network outage hold with 30s retries.
