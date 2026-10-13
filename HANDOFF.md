@@ -1,6 +1,6 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat: prune 5 duplicate photos keeping highest quality versions (antigravity, 2026-10-12 23:29 EDT)
+- Last save (MBP M3): feat(pairs): add dedicated UI to review, confirm, and deny photo pairings (antigravity, 2026-10-12 23:37 EDT)
 - Completed:
   - Fixed resize resetting to slide 0 bug in `handleResize()` using a `found` flag, avoided unnecessary queue rebuilds when pairable flags are unchanged, incremented `showSeq`, and rescheduled auto-advance timer.
   - Handled transient photo failures gracefully without dropping from `photos`: tracked failures per photo in map, skipped failed photos for remainder of round, only permanently removed after 3 online failures with intervening success, and added 3-in-a-row network outage hold with 30s retries.
@@ -15,6 +15,9 @@
   - Pruned 23 additional photos removed from Google Photos album in round 2, updating `photos.json` manifest down from 321 to 298 photos.
   - Replaced 58 low-resolution photos with AI-upscaled versions (backing up originals in `photos/originals/`), verifying 0 of the 74 previously pruned photos were restored.
   - Identified 5 duplicate photo pairs via DCT perceptual hashing and Laplacian sharpness audits; pruned the 5 lower-quality duplicates (`59d579137c.jpg`, `b519110580.jpg`, `f8330690af.jpg`, `02fe88b041.jpg`, `5448d2c568.jpg`) and kept the dated, sharper, higher-resolution masters, reducing manifest count from 298 to 293 photos.
+  - Built interactive pairing review UI (`pairs.html`) with Kiosk Split (portrait 1080×1920 9:16), Side-by-Side, and Compact Grid modes, keyboard shortcuts (<kbd>C</kbd>/<kbd>D</kbd>/<kbd>R</kbd>), and deep linking.
+  - Created `scripts/serve.py` review server with POST `/api/overrides` and `/api/sync` endpoints to persist manual overrides to `photos/overrides.json` and recompute scores in one click.
+  - Applied user's initial manual overrides (`5828f3b0b8`+`9be860e116` confirmed as priority 1.0; `16df09b0ea`+`7e8cb7542a` and `9b83482d6d`+`d9d0a318a0` denied) and pushed live to `display.polisti.co`. Unapproved pairings with score $\ge 0.2$ continue to pair naturally without requiring manual approval.
 - In flight: none.
 - Inbound: none.
 - Next:

@@ -122,15 +122,25 @@ Optional file `photos/overrides.json` to manually adjust tags and pairings witho
 - `always_pair`: forces the pair score to 1.0 and places each photo at the top of the other's partner list.
 - `never_pair`: forces the pair score to 0.0, preventing them from being paired as partners.
 
-### Review tool (`review.html`)
+### Review tools (`pairs.html` & `review.html`)
 
-A local desktop review page to verify tagging accuracy and pairing quality:
-- Displays each photo with its thumbnail, dimensions, capture date, coordinates, caption, and tag badges.
-- Shows the top 3 partner thumbnails with calculated compatibility scores and dates.
-- Filter by tag (scene, subject, event, mood, black & white).
-- Filter by "No date" to identify photos needing Takeout metadata.
-- Filter by "Has partners" and search by caption or filename.
-- Sort by date, partner count, or top score.
+- **Pairing review (`pairs.html`)**:
+  - Interactive curation UI to inspect algorithm-suggested pairings and apply personal preferences.
+  - Three preview modes: **Kiosk Split** (emulates the portrait 1080×1920 Echo Show 15 layout with 9:16 proportions), **Side by Side**, and **Compact Grid**.
+  - Review actions: **✓ Confirm** (`always_pair`, score 1.0, top priority), **✕ Deny** (`never_pair`, score 0.0, excluded), and **↺ Reset** (revert to algorithm suggestion).
+  - Rapid keyboard workflow: <kbd>C</kbd>/<kbd>Y</kbd> to confirm, <kbd>D</kbd>/<kbd>N</kbd> to deny, <kbd>R</kbd> to reset, <kbd>J</kbd>/<kbd>K</kbd> or arrows to navigate.
+  - Filter by status (All, Unreviewed, Confirmed, Denied) or score threshold ($\ge 0.20$, $\ge 0.35$, $\ge 0.45$, $\ge 0.50$).
+  - Search by photo filename, caption, tag, or date.
+  - Deep-link support: `pairs.html?photo=2e55ef7396.jpg`.
+  - Live persistence to `photos/overrides.json` and one-click "Sync Kiosk" to recompute scores.
+  - *Pairing philosophy:* suggested pairs do **not** require manual approval to be displayed. Approved items simply reinforce the algorithm by prioritizing your personal preferences.
+
+- **Photo review (`review.html`)**:
+  - Desktop inspection page for photo metadata, tags, and top partner rankings.
+  - Direct links to review individual photo pairings in `pairs.html`.
+
+- **Local review server (`scripts/serve.py`)**:
+  - Run `python3 scripts/serve.py 8088` to serve the kiosk and review tools locally with live POST endpoints for `/api/overrides` and `/api/sync`.
 
 ### Stay-awake stack & kiosk resilience
 
