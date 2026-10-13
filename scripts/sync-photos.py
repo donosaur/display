@@ -5,7 +5,8 @@ Renames every image in photos/ to a content hash (first 10 hex characters of sha
 reads dimensions honoring EXIF orientation, extracts capture date and geo location
 (supporting Google Takeout exports and EXIF metadata fallback), tags photos visually
 using the Claude API with a fixed vocabulary, computes local image features (luma,
-saturation, warmth, palette, phash), writes photos/photos.json, and reports images
+saturation, warmth, palette, phash), precomputes pair compatibility scores,
+writes compact photos/photos.json and formatted photos.debug.json, and reports images
 whose longest edge is under 1080px.
 """
 
@@ -16,6 +17,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import math
 import os
 import random
 import re
@@ -50,8 +52,26 @@ except ImportError:
 
 PHOTOS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "photos")
 MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
+DEBUG_MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.debug.json")
 TAGS_CACHE_PATH = os.path.join(PHOTOS_DIR, ".tags-cache.json")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Pair scoring weights (constants for tuning)
+WEIGHT_SAME_DAY = 0.40
+WEIGHT_WITHIN_3_DAYS = 0.25
+WEIGHT_SAME_MONTH_YEAR = 0.10
+WEIGHT_GEO_2KM = 0.15
+WEIGHT_SAME_EVENT = 0.10
+WEIGHT_SAME_SCENE = 0.10
+WEIGHT_SUBJECTS_JACCARD = 0.15
+WEIGHT_COLOR_COMPAT = 0.15
+
+# Penalty thresholds
+HARD_PENALTY_PHASH_DIST = 10
+SOFT_PENALTY_LUMA_DIFF = 0.45
+SOFT_PENALTY_FACTOR = 0.50
+MIN_PARTNER_SCORE = 0.20
+MAX_PARTNERS = 10
 
 # Fixed vocabulary for visual tagging
 SCENES = [
@@ -131,7 +151,6 @@ def get_jpeg_dimensions(data):
         idx += chunk_len
 
     if width and height:
-        # Orientations 5, 6, 7, 8 swap width and height
         if orientation in (5, 6, 7, 8):
             width, height = height, width
         return width, height
@@ -286,7 +305,6 @@ def parse_exif_metadata(path):
                 exif_ifd = exif.get_ifd(0x8769) if hasattr(exif, "get_ifd") else {}
                 gps_ifd = exif.get_ifd(0x8825) if hasattr(exif, "get_ifd") else {}
 
-                # 1. Date: DateTimeOriginal (36867) -> DateTime (306)
                 dt_orig = exif_ifd.get(36867) or exif_ifd.get(36868)
                 dt_any = exif.get(306)
 
@@ -305,7 +323,6 @@ def parse_exif_metadata(path):
                     else:
                         date_val = raw_dt
 
-                # 2. GPS coordinates
                 if gps_ifd:
                     def _coord_to_deg(val):
                         if not val or len(val) < 3:
@@ -336,7 +353,6 @@ def find_takeout_sidecar(img_path, dir_json_map, json_title_map):
     basename = os.path.basename(img_path)
     stem, ext = os.path.splitext(basename)
 
-    # 1. Exact conventional names
     candidates = [
         f"{basename}.json",
         f"{basename}.supplemental-metadata.json",
@@ -348,11 +364,9 @@ def find_takeout_sidecar(img_path, dir_json_map, json_title_map):
         if os.path.isfile(full_c):
             return full_c
 
-    # 2. Check title mapping (Takeout JSONs usually contain original filename in 'title')
     if basename in json_title_map:
         return json_title_map[basename]
 
-    # 3. Truncated variants in same directory
     json_files = dir_json_map.get(dirname, [])
     for jf in json_files:
         jbase = os.path.basename(jf)
@@ -499,18 +513,15 @@ def validate_and_clean_tags(raw):
     if not isinstance(raw, dict):
         return None
 
-    # scene
     scene = raw.get("scene")
     if scene not in SCENES:
         scene = "other"
 
-    # subjects
     raw_subjects = raw.get("subjects") or []
     if isinstance(raw_subjects, str):
         raw_subjects = [raw_subjects]
     subjects = [s for s in raw_subjects if s in SUBJECTS]
 
-    # people_count
     pc = str(raw.get("people_count", "0"))
     if pc not in PEOPLE_COUNTS:
         if pc in ("3", "4", "5"):
@@ -520,25 +531,20 @@ def validate_and_clean_tags(raw):
         else:
             pc = "0"
 
-    # mood
     mood = raw.get("mood")
     if mood not in MOODS:
         mood = "calm"
 
-    # time_of_day
     tod = raw.get("time_of_day")
     if tod not in TIMES_OF_DAY:
         tod = "indoor-unknown"
 
-    # is_bw
     is_bw = bool(raw.get("is_bw", False))
 
-    # event_hint
     event_hint = raw.get("event_hint")
     if event_hint not in EVENT_HINTS:
         event_hint = "everyday"
 
-    # caption (max 12 words)
     caption_raw = str(raw.get("caption") or "")
     caption_words = caption_raw.strip().split()
     caption = " ".join(caption_words[:12]) if caption_words else None
@@ -724,6 +730,203 @@ def run_visual_tagging(unique_filenames, retag=False):
     return cache
 
 
+# ==================== PAIR SCORING ====================
+
+def parse_iso_date(dt_str):
+    """Parse ISO 8601 date string to datetime object."""
+    if not dt_str or not isinstance(dt_str, str):
+        return None
+    dt_clean = dt_str.replace("Z", "").split(".")[0]
+    try:
+        return datetime.fromisoformat(dt_clean)
+    except Exception:
+        pass
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", dt_str)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            pass
+    return None
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    """Calculate great-circle distance in kilometers between two GPS coordinates."""
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2.0) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+    return r * c
+
+
+def hex_to_lab(hex_str):
+    """Convert hex color (#rrggbb) to CIE-Lab coordinates."""
+    h = hex_str.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+    def _srgb_to_linear(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    rl = _srgb_to_linear(r)
+    gl = _srgb_to_linear(g)
+    bl = _srgb_to_linear(b)
+
+    # D65 CIE XYZ
+    x = rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375
+    y = rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750
+    z = rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041
+
+    xn, yn, zn = 0.95047, 1.00000, 1.08883
+    xr = x / xn
+    yr = y / yn
+    zr = z / zn
+
+    def _f(t):
+        return t ** (1.0 / 3.0) if t > 0.008856 else (7.787 * t + 16.0 / 116.0)
+
+    fx = _f(xr)
+    fy = _f(yr)
+    fz = _f(zr)
+
+    l_val = 116.0 * fy - 16.0
+    a_val = 500.0 * (fx - fy)
+    b_val = 200.0 * (fy - fz)
+    return l_val, a_val, b_val
+
+
+def compute_palette_lab_dist(lab_pal1, lab_pal2):
+    """Compute average mutual minimum Euclidean distance between two 3-color Lab palettes."""
+    d1 = [min(math.sqrt((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2) for c2 in lab_pal2) for c1 in lab_pal1]
+    d2 = [min(math.sqrt((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2) for c1 in lab_pal1) for c2 in lab_pal2]
+    return (sum(d1) + sum(d2)) / (len(d1) + len(d2))
+
+
+def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2):
+    """Compute pair score in 0..1 between two photos based on weighted criteria and penalties."""
+    # Hard penalty 1: phash Hamming distance <= 10 (near-duplicate or burst shot)
+    phash_dist = hamming_distance(p1["phash"], p2["phash"])
+    if phash_dist <= HARD_PENALTY_PHASH_DIST:
+        return 0.0
+
+    t1 = p1.get("tags")
+    t2 = p2.get("tags")
+
+    # Hard penalty 2: one is_bw and the other color
+    if t1 and t2:
+        if t1.get("is_bw") != t2.get("is_bw"):
+            return 0.0
+    else:
+        # Fallback to saturation if tags are absent
+        is_bw1 = t1.get("is_bw") if t1 else (p1["sat"] < 0.05)
+        is_bw2 = t2.get("is_bw") if t2 else (p2["sat"] < 0.05)
+        if is_bw1 != is_bw2:
+            return 0.0
+
+    # Hard penalty 3: either has subject text-screenshot
+    if t1 and "text-screenshot" in (t1.get("subjects") or []):
+        return 0.0
+    if t2 and "text-screenshot" in (t2.get("subjects") or []):
+        return 0.0
+
+    score = 0.0
+
+    # 1. Date scoring
+    if d1 and d2:
+        if d1.year == d2.year and d1.month == d2.month and d1.day == d2.day:
+            score += WEIGHT_SAME_DAY
+        elif abs((d1.date() - d2.date()).days) <= 3:
+            score += WEIGHT_WITHIN_3_DAYS
+        elif d1.year == d2.year and d1.month == d2.month:
+            score += WEIGHT_SAME_MONTH_YEAR
+
+    # 2. Geo scoring (within 2 km)
+    g1 = p1.get("geo")
+    g2 = p2.get("geo")
+    if g1 and g2 and len(g1) == 2 and len(g2) == 2:
+        dist_km = haversine_km(g1[0], g1[1], g2[0], g2[1])
+        if dist_km <= 2.0:
+            score += WEIGHT_GEO_2KM
+
+    # 3. Tags scoring
+    if t1 and t2:
+        # Same event_hint (excluding everyday/other)
+        e1 = t1.get("event_hint")
+        e2 = t2.get("event_hint")
+        if e1 and e2 and e1 == e2 and e1 not in ("everyday", "other"):
+            score += WEIGHT_SAME_EVENT
+
+        # Same scene
+        s1 = t1.get("scene")
+        s2 = t2.get("scene")
+        if s1 and s2 and s1 == s2 and s1 != "other":
+            score += WEIGHT_SAME_SCENE
+
+        # Subjects Jaccard similarity * 0.15
+        subj1 = set(t1.get("subjects") or [])
+        subj2 = set(t2.get("subjects") or [])
+        union = subj1 | subj2
+        if union:
+            jaccard = len(subj1 & subj2) / len(union)
+            score += jaccard * WEIGHT_SUBJECTS_JACCARD
+
+    # 4. Color compatibility
+    luma_diff = abs(p1["luma"] - p2["luma"])
+    sat_diff = abs(p1["sat"] - p2["sat"])
+    warmth_diff = abs(p1["warmth"] - p2["warmth"]) / 2.0  # warmth in [-1, 1], normalized diff in [0, 1]
+    lab_dist = compute_palette_lab_dist(lab_pal1, lab_pal2)
+    pal_dist_norm = min(1.0, lab_dist / 100.0)
+
+    color_blend = 0.25 * luma_diff + 0.25 * sat_diff + 0.25 * warmth_diff + 0.25 * pal_dist_norm
+    color_compat = max(0.0, 1.0 - color_blend)
+    score += color_compat * WEIGHT_COLOR_COMPAT
+
+    # Soft penalty: |luma diff| > 0.45 -> multiply by 0.5 (very dark next to very bright)
+    if luma_diff > SOFT_PENALTY_LUMA_DIFF:
+        score *= SOFT_PENALTY_FACTOR
+
+    return max(0.0, min(1.0, score))
+
+
+def compute_all_pair_scores(manifest):
+    """Compute pairwise scores for all photos and attach top 10 partners (score >= 0.2) to each."""
+    n = len(manifest)
+    print(f"Scoring all {n * (n - 1) // 2} photo pairs...")
+
+    # Pre-parse dates and Lab palettes
+    parsed_dates = [parse_iso_date(p.get("date")) for p in manifest]
+    lab_palettes = [[hex_to_lab(h) for h in p.get("palette", [])] for p in manifest]
+
+    # Matrix of partner scores
+    partners_by_photo = [[] for _ in range(n)]
+
+    for i in range(n):
+        p1 = manifest[i]
+        d1 = parsed_dates[i]
+        lab1 = lab_palettes[i]
+
+        for j in range(i + 1, n):
+            p2 = manifest[j]
+            d2 = parsed_dates[j]
+            lab2 = lab_palettes[j]
+
+            s = score_pair(p1, p2, d1, d2, lab1, lab2)
+            if s >= MIN_PARTNER_SCORE:
+                partners_by_photo[i].append((p2["f"], round(s, 3)))
+                partners_by_photo[j].append((p1["f"], round(s, 3)))
+
+    # Sort each photo's partners descending by score and truncate to top MAX_PARTNERS
+    for i in range(n):
+        sorted_partners = sorted(partners_by_photo[i], key=lambda x: x[1], reverse=True)
+        manifest[i]["partners"] = [[fn, sc] for fn, sc in sorted_partners[:MAX_PARTNERS]]
+
+    # Stats
+    has_partners = sum(1 for p in manifest if len(p.get("partners", [])) > 0)
+    total_partner_links = sum(len(p.get("partners", [])) for p in manifest)
+    print(f"Partner scoring complete: {has_partners}/{n} photos have >= 1 partner (average {total_partner_links / max(1, n):.1f} partners).")
+
+
 def sync_photos(takeout_dir=None, retag=False):
     if not os.path.isdir(PHOTOS_DIR):
         print(f"Error: Photos directory not found at {PHOTOS_DIR}", file=sys.stderr)
@@ -733,7 +936,7 @@ def sync_photos(takeout_dir=None, retag=False):
     all_files = [f for f in os.listdir(PHOTOS_DIR) if not f.startswith(".")]
     image_files = [
         f for f in all_files
-        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS and f != "photos.json"
+        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS and not f.startswith("photos.")
     ]
 
     print(f"Found {len(image_files)} image files in {PHOTOS_DIR}...")
@@ -800,7 +1003,6 @@ def sync_photos(takeout_dir=None, retag=False):
         t_date = t_info.get("date")
         t_geo = t_info.get("geo")
 
-        # Determine date: prefer local EXIF (contains local time), or Takeout timestamp
         final_date = None
         if exif_date:
             final_date = exif_date
@@ -811,7 +1013,6 @@ def sync_photos(takeout_dir=None, retag=False):
         else:
             date_counts["None"] += 1
 
-        # Determine geo: Takeout or EXIF
         final_geo = None
         if t_geo:
             final_geo = t_geo
@@ -822,7 +1023,6 @@ def sync_photos(takeout_dir=None, retag=False):
         else:
             geo_counts["None"] += 1
 
-        # Tag data
         tag_entry = tags_cache.get(chash)
         tags_obj = None
         caption_val = None
@@ -830,7 +1030,6 @@ def sync_photos(takeout_dir=None, retag=False):
             tags_obj = {k: v for k, v in tag_entry.items() if k != "caption"}
             caption_val = tag_entry.get("caption")
 
-        # Local features (no API: luma, sat, warmth, palette, phash)
         features = compute_local_features(filepath)
 
         entry = {
@@ -852,14 +1051,21 @@ def sync_photos(takeout_dir=None, retag=False):
     # Sort manifest deterministically by filename
     manifest.sort(key=lambda item: item["f"])
 
-    # 7. Write photos.json
+    # 7. Compute pair compatibility scores
+    compute_all_pair_scores(manifest)
+
+    # 8. Write compact photos.json (no indent) and formatted photos.debug.json
     with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, separators=(",", ":"))
+        f.write("\n")
+
+    with open(DEBUG_MANIFEST_PATH, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
 
-    print(f"\nWrote {len(manifest)} photos to {MANIFEST_PATH}.")
+    print(f"\nWrote {len(manifest)} photos to compact {MANIFEST_PATH} and debug {DEBUG_MANIFEST_PATH}.")
 
-    # 8. Print date and location summary
+    # 9. Print date and location summary
     total = len(manifest)
     total_with_date = total - date_counts["None"]
     total_with_geo = total - geo_counts["None"]
@@ -878,7 +1084,7 @@ def sync_photos(takeout_dir=None, retag=False):
             print(f"    - {src}: {count}")
     print(f"    - No geo: {geo_counts['None']}")
 
-    # 9. Report low-resolution images
+    # 10. Report low-resolution images
     print(f"\n{len(under_1080)} images have longest edge under 1080px (originals can be swapped):")
     for fname, w, h in sorted(under_1080, key=lambda x: max(x[1], x[2])):
         print(f"  {fname}: {w}×{h} (longest: {max(w, h)}px)")
