@@ -726,9 +726,13 @@ def run_visual_tagging(unique_filenames, retag=False):
             except Exception as e:
                 print(f"  Error tagging {fn}: {e}", file=sys.stderr)
 
-    with open(TAGS_CACHE_PATH, "w", encoding="utf-8") as f:
+    tmp_tags_cache = TAGS_CACHE_PATH + ".tmp"
+    with open(tmp_tags_cache, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)
         f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_tags_cache, TAGS_CACHE_PATH)
     print(f"Saved {len(cache)} tagged photos to {TAGS_CACHE_PATH}.")
 
     return cache
@@ -1151,14 +1155,22 @@ def sync_photos(takeout_dir=None, retag=False):
     # 8. Compute pair compatibility scores
     compute_all_pair_scores(manifest, overrides=overrides)
 
-    # 9. Write compact photos.json (no indent) and formatted photos.debug.json
-    with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+    # 9. Write compact photos.json (no indent) and formatted photos.debug.json atomically
+    tmp_manifest = MANIFEST_PATH + ".tmp"
+    with open(tmp_manifest, "w", encoding="utf-8") as f:
         json.dump(manifest, f, separators=(",", ":"))
         f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_manifest, MANIFEST_PATH)
 
-    with open(DEBUG_MANIFEST_PATH, "w", encoding="utf-8") as f:
+    tmp_debug = DEBUG_MANIFEST_PATH + ".tmp"
+    with open(tmp_debug, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_debug, DEBUG_MANIFEST_PATH)
 
     print(f"\nWrote {len(manifest)} photos to compact {MANIFEST_PATH} and debug {DEBUG_MANIFEST_PATH}.")
 

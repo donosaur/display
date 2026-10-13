@@ -5,12 +5,15 @@ Serves static files and provides API endpoints to read/write manual overrides
 and recompute partner scores.
 """
 
+import argparse
 import http.server
 import json
 import os
+import posixpath
 import socketserver
 import subprocess
 import sys
+import urllib.parse
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PHOTOS_DIR = os.path.join(BASE_DIR, "photos")
@@ -23,26 +26,63 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
+    def _is_path_forbidden(self, raw_path):
+        url_path = urllib.parse.urlparse(raw_path).path
+        url_path = urllib.parse.unquote(url_path)
+        norm_path = posixpath.normpath(url_path)
+        segments = [seg for seg in norm_path.strip("/").split("/") if seg]
+        for seg in segments:
+            if seg.startswith("."):
+                return True
+        if segments:
+            if segments[0] == "scripts":
+                return True
+            if len(segments) >= 2 and segments[0] == "photos" and segments[1] == "originals":
+                return True
+        return False
+
+    def _is_same_origin(self):
+        origin = self.headers.get("Origin")
+        if not origin:
+            return True
+        host = self.headers.get("Host")
+        parsed = urllib.parse.urlparse(origin)
+        return parsed.netloc == host
+
     def _send_json(self, status_code, payload):
         body = json.dumps(payload, indent=2).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        origin = self.headers.get("Origin")
+        if origin and self._is_same_origin():
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        if self._is_path_forbidden(self.path):
+            self.send_error(403, "Forbidden")
+            return
+        origin = self.headers.get("Origin")
+        if origin and not self._is_same_origin():
+            self.send_error(403, "Forbidden")
+            return
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        if origin and self._is_same_origin():
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def do_GET(self):
+        if self._is_path_forbidden(self.path):
+            self.send_error(403, "Forbidden")
+            return
+
         url_path = self.path.split("?")[0]
         if url_path == "/api/overrides":
             if os.path.isfile(OVERRIDES_PATH):
@@ -58,7 +98,21 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         super().do_GET()
 
+    def do_HEAD(self):
+        if self._is_path_forbidden(self.path):
+            self.send_error(403, "Forbidden")
+            return
+        super().do_HEAD()
+
     def do_POST(self):
+        if self._is_path_forbidden(self.path):
+            self.send_error(403, "Forbidden")
+            return
+
+        if not self._is_same_origin():
+            self._send_json(403, {"ok": False, "error": "Cross-origin request rejected"})
+            return
+
         url_path = self.path.split("?")[0]
         if url_path == "/api/overrides":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -94,9 +148,13 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             try:
                 os.makedirs(PHOTOS_DIR, exist_ok=True)
-                with open(OVERRIDES_PATH, "w", encoding="utf-8") as f:
+                tmp_overrides = OVERRIDES_PATH + ".tmp"
+                with open(tmp_overrides, "w", encoding="utf-8") as f:
                     json.dump(overrides, f, indent=2)
                     f.write("\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_overrides, OVERRIDES_PATH)
 
                 self._send_json(200, {
                     "ok": True,
@@ -116,9 +174,9 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
                     capture_output=True,
                     text=True,
                     cwd=BASE_DIR,
-                    timeout=30,
+                    timeout=900,  # 15 minutes
                 )
-                self._send_json(200, {
+                self._send_json(200 if res.returncode == 0 else 500, {
                     "ok": res.returncode == 0,
                     "output": res.stdout,
                     "error": res.stderr if res.returncode != 0 else "",
@@ -130,20 +188,30 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
         self._send_json(404, {"ok": False, "error": "Not found"})
 
 
-def run(port=8088):
+def run(port=8088, host="127.0.0.1"):
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", port), ReviewRequestHandler) as httpd:
-        print(f"Display Kiosk Review Server running at http://localhost:{port}/")
-        print(f"  - Kiosk Slideshow:  http://localhost:{port}/")
-        print(f"  - Pairing Review:   http://localhost:{port}/pairs.html")
-        print(f"  - Photo Review:     http://localhost:{port}/review.html")
-        print(f"  - Upscale Compare:  http://localhost:{port}/compare.html")
+    with socketserver.TCPServer((host, port), ReviewRequestHandler) as httpd:
+        display_host = "localhost" if host == "127.0.0.1" else (host if host != "0.0.0.0" else "0.0.0.0")
+        print(f"Display Kiosk Review Server running at http://{display_host}:{port}/ (bound to {host})")
+        print(f"  - Kiosk Slideshow:  http://{display_host}:{port}/")
+        print(f"  - Pairing Review:   http://{display_host}:{port}/pairs.html")
+        print(f"  - Photo Review:     http://{display_host}:{port}/review.html")
+        print(f"  - Upscale Compare:  http://{display_host}:{port}/compare.html")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\nShutting down server.")
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Local review server for the display kiosk.")
+    parser.add_argument("port", nargs="?", type=int, default=8088, help="Port to serve on (default: 8088)")
+    parser.add_argument("--lan", action="store_true", help="Bind to all interfaces (0.0.0.0) instead of localhost")
+    args = parser.parse_args()
+
+    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    run(port=args.port, host=host)
+
+
 if __name__ == "__main__":
-    port_arg = int(sys.argv[1]) if len(sys.argv) > 1 else 8088
-    run(port_arg)
+    main()
