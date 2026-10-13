@@ -55,22 +55,39 @@ def analyze_photo(photo_meta, photos_dir):
     bytes_per_pixel = file_size_bytes / pixels if pixels > 0 else 0.0
 
     # Sharpness via Laplacian variance
+    is_video = photo_meta.get("type") == "video" or filepath.lower().endswith((".mp4", ".webm", ".mov", ".m4v"))
     lap_var = 0.0
     try:
-        with Image.open(filepath) as img:
-            # Resize large images for fast consistent sharpness check if needed
-            # but analyzing full or 1080-capped gives consistent local edge variance
-            gray = np.array(img.convert("L"), dtype=np.float32)
-            if gray.shape[0] > 2 and gray.shape[1] > 2:
-                lap = (
-                    gray[:-2, 1:-1]
-                    + gray[2:, 1:-1]
-                    + gray[1:-1, :-2]
-                    + gray[1:-1, 2:]
-                    - 4 * gray[1:-1, 1:-1]
-                )
-                lap_var = float(lap.var())
-    except Exception as e:
+        if is_video:
+            import subprocess, shutil, io
+            ffmpeg_bin = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+            if os.path.isfile(ffmpeg_bin):
+                cmd = [ffmpeg_bin, "-ss", "0.5", "-i", filepath, "-vframes", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"]
+                res = subprocess.run(cmd, capture_output=True, check=True)
+                with Image.open(io.BytesIO(res.stdout)) as img:
+                    gray = np.array(img.convert("L"), dtype=np.float32)
+                    if gray.shape[0] > 2 and gray.shape[1] > 2:
+                        lap = (
+                            gray[:-2, 1:-1]
+                            + gray[2:, 1:-1]
+                            + gray[1:-1, :-2]
+                            + gray[1:-1, 2:]
+                            - 4 * gray[1:-1, 1:-1]
+                        )
+                        lap_var = float(lap.var())
+        else:
+            with Image.open(filepath) as img:
+                gray = np.array(img.convert("L"), dtype=np.float32)
+                if gray.shape[0] > 2 and gray.shape[1] > 2:
+                    lap = (
+                        gray[:-2, 1:-1]
+                        + gray[2:, 1:-1]
+                        + gray[1:-1, :-2]
+                        + gray[1:-1, 2:]
+                        - 4 * gray[1:-1, 1:-1]
+                    )
+                    lap_var = float(lap.var())
+    except Exception:
         lap_var = 0.0
 
     # Quality classification

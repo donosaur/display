@@ -46,3 +46,14 @@
   for = "/photos/*.webp"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/photos/*.mp4"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/photos/*.webm"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+

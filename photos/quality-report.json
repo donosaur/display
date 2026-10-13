@@ -3,29 +3,11 @@
   "tier_counts": {
     "CRITICAL": 0,
     "NEEDS_UPSCALE": 0,
-    "MARGINAL": 10,
-    "GOOD": 283
+    "MARGINAL": 9,
+    "GOOD": 284
   },
   "candidates_count": 0,
   "photos": [
-    {
-      "filename": "6f11c8d6e9.jpg",
-      "width": 608,
-      "height": 1080,
-      "longest_edge": 1080,
-      "shortest_edge": 608,
-      "aspect_ratio": 0.56,
-      "megapixels": 0.66,
-      "size_kb": 38.1,
-      "bytes_per_pixel": 0.059,
-      "laplacian_var": 58.7,
-      "tier": "MARGINAL",
-      "reason": "Heavy compression artifacts (0.059 BPP)",
-      "quality_score": 72.7,
-      "date": null,
-      "caption": null,
-      "tags": null
-    },
     {
       "filename": "70afef6e09.jpg",
       "width": 1080,
@@ -981,6 +963,34 @@
       "tags": null
     },
     {
+      "filename": "74a4bbcfe2.mp4",
+      "width": 1080,
+      "height": 1920,
+      "longest_edge": 1920,
+      "shortest_edge": 1080,
+      "aspect_ratio": 0.56,
+      "megapixels": 2.07,
+      "size_kb": 15727.3,
+      "bytes_per_pixel": 7.767,
+      "laplacian_var": 2.1,
+      "tier": "GOOD",
+      "reason": "Meets or exceeds display baseline",
+      "quality_score": 85.1,
+      "date": "2026-07-27T16:50:52",
+      "caption": "Whale shark at Georgia Aquarium",
+      "tags": {
+        "scene": "travel-landmark",
+        "mood": "calm",
+        "subjects": [
+          "landscape"
+        ],
+        "people_count": "0",
+        "time_of_day": "indoor-unknown",
+        "event_hint": "trip",
+        "is_bw": false
+      }
+    },
+    {
       "filename": "89ef3db523.jpg",
       "width": 2448,
       "height": 2448,
@@ -1067,24 +1077,6 @@
       "reason": "Meets or exceeds display baseline",
       "quality_score": 86.2,
       "date": "2018-06-12T19:56:25",
-      "caption": null,
-      "tags": null
-    },
-    {
-      "filename": "ec2c3c00bc.jpg",
-      "width": 812,
-      "height": 1080,
-      "longest_edge": 1080,
-      "shortest_edge": 812,
-      "aspect_ratio": 0.75,
-      "megapixels": 0.88,
-      "size_kb": 122.1,
-      "bytes_per_pixel": 0.143,
-      "laplacian_var": 196.9,
-      "tier": "GOOD",
-      "reason": "Meets or exceeds display baseline",
-      "quality_score": 86.2,
-      "date": null,
       "caption": null,
       "tags": null
     },
@@ -1807,6 +1799,34 @@
       "date": "2015-10-03T12:15:53",
       "caption": null,
       "tags": null
+    },
+    {
+      "filename": "ded31895ea.mp4",
+      "width": 812,
+      "height": 1080,
+      "longest_edge": 1080,
+      "shortest_edge": 812,
+      "aspect_ratio": 0.75,
+      "megapixels": 0.88,
+      "size_kb": 1565.0,
+      "bytes_per_pixel": 1.827,
+      "laplacian_var": 134.4,
+      "tier": "GOOD",
+      "reason": "Meets or exceeds display baseline",
+      "quality_score": 91.7,
+      "date": "2023-11-08T15:45:03",
+      "caption": "Sleeping cat",
+      "tags": {
+        "scene": "indoor-home",
+        "mood": "calm",
+        "subjects": [
+          "cat"
+        ],
+        "people_count": "0",
+        "time_of_day": "day",
+        "event_hint": "everyday",
+        "is_bw": false
+      }
     },
     {
       "filename": "82b685a588.jpg",

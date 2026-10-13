@@ -22,6 +22,8 @@ import os
 import random
 import re
 import struct
+import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -64,6 +66,8 @@ DEBUG_MANIFEST_PATH = os.path.join(ROOT_PHOTOS_DIR, "photos.debug.json")
 TAGS_CACHE_PATH = os.path.join(ROOT_PHOTOS_DIR, ".tags-cache.json")
 OVERRIDES_PATH = os.path.join(ROOT_PHOTOS_DIR, "overrides.json")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 # Pair scoring weights (constants for tuning)
 WEIGHT_SAME_DAY = 0.40
@@ -181,6 +185,105 @@ def get_image_dimensions(path):
     return None
 
 
+def is_video_file(path_or_ext):
+    if not path_or_ext:
+        return False
+    ext = os.path.splitext(path_or_ext)[1].lower() if "." in path_or_ext else path_or_ext.lower()
+    return ext in VIDEO_EXTENSIONS
+
+
+def get_video_metadata(path):
+    """Extract width, height, duration (seconds), and creation_time using ffprobe."""
+    ffprobe_bin = shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
+    if not os.path.isfile(ffprobe_bin):
+        return None
+    try:
+        cmd = [
+            ffprobe_bin,
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height,duration:stream_tags=rotate,creation_time:stream_side_data=rotation:format=duration:format_tags=creation_time",
+            "-of", "json",
+            path,
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(res.stdout)
+        streams = data.get("streams", [])
+        if not streams:
+            return None
+        s = streams[0]
+        w = s.get("width")
+        h = s.get("height")
+        if not w or not h:
+            return None
+        # Check rotation
+        rotation = 0
+        side_data = s.get("side_data_list", [])
+        for sd in side_data:
+            if "rotation" in sd:
+                try:
+                    rotation = int(sd["rotation"])
+                except Exception:
+                    pass
+        if not rotation and "tags" in s and "rotate" in s["tags"]:
+            try:
+                rotation = int(s["tags"]["rotate"])
+            except Exception:
+                pass
+        if abs(rotation) in (90, 270):
+            w, h = h, w
+
+        duration = None
+        if "duration" in s and s["duration"] is not None:
+            try:
+                duration = float(s["duration"])
+            except ValueError:
+                pass
+        if duration is None and "format" in data and "duration" in data["format"]:
+            try:
+                duration = float(data["format"]["duration"])
+            except ValueError:
+                pass
+
+        creation_time = None
+        fmt_tags = data.get("format", {}).get("tags", {})
+        stream_tags = s.get("tags", {})
+        raw_ct = fmt_tags.get("creation_time") or stream_tags.get("creation_time")
+        if raw_ct:
+            creation_time = raw_ct.strip().replace("Z", "")
+            if len(creation_time) >= 19:
+                creation_time = creation_time[:19]
+
+        return w, h, (round(duration, 2) if duration else None), creation_time
+    except Exception as e:
+        print(f"Warning: ffprobe failed on {path}: {e}", file=sys.stderr)
+        return None
+
+
+def extract_video_frame(path, timestamp=1.0):
+    """Extract a representative video frame as a PIL Image."""
+    ffmpeg_bin = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+    if not os.path.isfile(ffmpeg_bin):
+        return None
+    for ts in [str(timestamp), "0.5", "0.0"]:
+        try:
+            cmd = [
+                ffmpeg_bin,
+                "-ss", ts,
+                "-i", path,
+                "-vframes", "1",
+                "-f", "image2pipe",
+                "-vcodec", "mjpeg",
+                "-",
+            ]
+            res = subprocess.run(cmd, capture_output=True, check=True)
+            if res.stdout:
+                return Image.open(io.BytesIO(res.stdout)).convert("RGB")
+        except Exception:
+            continue
+    return None
+
+
 # Precomputed 32x32 DCT matrix for 64-bit pHash
 _DCT_MATRIX = None
 
@@ -196,13 +299,20 @@ def _get_dct_matrix(n=32):
     return _DCT_MATRIX
 
 
-def compute_phash(image_path):
+def compute_phash(target):
     """Compute 64-bit DCT perceptual hash as 16-character hex string."""
     try:
-        with Image.open(image_path) as img:
-            img = ImageOps.exif_transpose(img)
-            img = img.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
-            pixels = np.asarray(img, dtype=np.float64)
+        if isinstance(target, Image.Image):
+            img = target
+        elif is_video_file(target):
+            img = extract_video_frame(target)
+            if img is None:
+                return None
+        else:
+            with Image.open(target) as im:
+                img = ImageOps.exif_transpose(im)
+        img = img.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
+        pixels = np.asarray(img, dtype=np.float64)
 
         c = _get_dct_matrix(32)
         dct = c @ pixels @ c.T
@@ -224,7 +334,7 @@ def hamming_distance(h1, h2):
     return bin(int(h1, 16) ^ int(h2, 16)).count("1")
 
 
-def compute_local_features(image_path):
+def compute_local_features(target):
     """Compute local image features (no API, Pillow + numpy):
     
     - luma: mean brightness (0-1)
@@ -233,63 +343,71 @@ def compute_local_features(image_path):
     - palette: 3 dominant colors via k-means on 64px thumbnail as hex
     - phash: 64-bit perceptual hash (16-char hex)
     """
-    phash = compute_phash(image_path)
+    phash = compute_phash(target)
 
-    with Image.open(image_path) as img:
-        img = ImageOps.exif_transpose(img)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+    if isinstance(target, Image.Image):
+        img = target
+    elif is_video_file(target):
+        img = extract_video_frame(target)
+        if img is None:
+            return {"luma": 0.5, "sat": 0.0, "warmth": 0.0, "palette": ["#000000", "#555555", "#aaaaaa"], "phash": phash}
+    else:
+        with Image.open(target) as im:
+            img = ImageOps.exif_transpose(im)
 
-        # 64x64 thumbnail for fast feature calculation
-        thumb = img.resize((64, 64), Image.Resampling.BILINEAR)
-        pixels = np.asarray(thumb, dtype=np.float64)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
 
-        r = pixels[:, :, 0]
-        g = pixels[:, :, 1]
-        b = pixels[:, :, 2]
+    # 64x64 thumbnail for fast feature calculation
+    thumb = img.resize((64, 64), Image.Resampling.BILINEAR)
+    pixels = np.asarray(thumb, dtype=np.float64)
 
-        # luma: mean brightness (0-1)
-        luma = float(np.mean(0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0)
+    r = pixels[:, :, 0]
+    g = pixels[:, :, 1]
+    b = pixels[:, :, 2]
 
-        # sat: mean saturation (0-1)
-        cmax = np.max(pixels, axis=-1)
-        cmin = np.min(pixels, axis=-1)
-        delta = cmax - cmin
-        sat_arr = np.zeros_like(cmax)
-        mask = cmax > 0
-        sat_arr[mask] = delta[mask] / cmax[mask]
-        sat = float(np.mean(sat_arr))
+    # luma: mean brightness (0-1)
+    luma = float(np.mean(0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0)
 
-        # warmth: mean of R minus B normalized to -1..1
-        warmth = float(np.mean(r - b) / 255.0)
+    # sat: mean saturation (0-1)
+    cmax = np.max(pixels, axis=-1)
+    cmin = np.min(pixels, axis=-1)
+    delta = cmax - cmin
+    sat_arr = np.zeros_like(cmax)
+    mask = cmax > 0
+    sat_arr[mask] = delta[mask] / cmax[mask]
+    sat = float(np.mean(sat_arr))
 
-        # palette: 3 dominant colors via small k-means
-        flat_pixels = pixels.reshape(-1, 3)
-        lum_flat = 0.2126 * flat_pixels[:, 0] + 0.7152 * flat_pixels[:, 1] + 0.0722 * flat_pixels[:, 2]
-        sorted_idx = np.argsort(lum_flat)
-        centers = flat_pixels[sorted_idx[[len(sorted_idx) // 6, len(sorted_idx) // 2, 5 * len(sorted_idx) // 6]]].copy()
+    # warmth: mean of R minus B normalized to -1..1
+    warmth = float(np.mean(r - b) / 255.0)
 
-        labels = np.zeros(len(flat_pixels), dtype=int)
-        for _ in range(12):
-            dists = np.sum((flat_pixels[:, None, :] - centers[None, :, :]) ** 2, axis=2)
-            labels = np.argmin(dists, axis=1)
-            new_centers = np.empty_like(centers)
-            for k in range(3):
-                cluster_pts = flat_pixels[labels == k]
-                if len(cluster_pts) > 0:
-                    new_centers[k] = np.mean(cluster_pts, axis=0)
-                else:
-                    new_centers[k] = centers[k]
-            if np.allclose(centers, new_centers, atol=0.5):
-                break
-            centers = new_centers
+    # palette: 3 dominant colors via small k-means
+    flat_pixels = pixels.reshape(-1, 3)
+    lum_flat = 0.2126 * flat_pixels[:, 0] + 0.7152 * flat_pixels[:, 1] + 0.0722 * flat_pixels[:, 2]
+    sorted_idx = np.argsort(lum_flat)
+    centers = flat_pixels[sorted_idx[[len(sorted_idx) // 6, len(sorted_idx) // 2, 5 * len(sorted_idx) // 6]]].copy()
 
-        counts = [np.sum(labels == k) for k in range(3)]
-        sorted_order = np.argsort(counts)[::-1]
-        palette = [
-            f"#{int(np.clip(round(centers[k][0]), 0, 255)):02x}{int(np.clip(round(centers[k][1]), 0, 255)):02x}{int(np.clip(round(centers[k][2]), 0, 255)):02x}"
-            for k in sorted_order
-        ]
+    labels = np.zeros(len(flat_pixels), dtype=int)
+    for _ in range(12):
+        dists = np.sum((flat_pixels[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+        labels = np.argmin(dists, axis=1)
+        new_centers = np.empty_like(centers)
+        for k in range(3):
+            cluster_pts = flat_pixels[labels == k]
+            if len(cluster_pts) > 0:
+                new_centers[k] = np.mean(cluster_pts, axis=0)
+            else:
+                new_centers[k] = centers[k]
+        if np.allclose(centers, new_centers, atol=0.5):
+            break
+        centers = new_centers
+
+    counts = [np.sum(labels == k) for k in range(3)]
+    sorted_order = np.argsort(counts)[::-1]
+    palette = [
+        f"#{int(np.clip(round(centers[k][0]), 0, 255)):02x}{int(np.clip(round(centers[k][1]), 0, 255)):02x}{int(np.clip(round(centers[k][2]), 0, 255)):02x}"
+        for k in sorted_order
+    ]
 
     return {
         "luma": round(luma, 3),
@@ -302,6 +420,12 @@ def compute_local_features(image_path):
 
 def parse_exif_metadata(path):
     """Extract capture date and GPS coordinates from EXIF metadata."""
+    if is_video_file(path):
+        vmeta = get_video_metadata(path)
+        if vmeta and vmeta[3]:
+            return vmeta[3], "Video Metadata", None, None
+        return None, None, None, None
+
     date_val = None
     date_src = None
     geo_val = None
@@ -502,19 +626,24 @@ def load_takeout_metadata(takeout_dir, local_photos):
 # ==================== VISUAL TAGGING ====================
 
 def prepare_image_for_api(image_path):
-    """Downscale photo to max 768px JPEG and return base64 encoded string."""
-    with Image.open(image_path) as img:
-        img = ImageOps.exif_transpose(img)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        w, h = img.size
-        max_dim = max(w, h)
-        if max_dim > 768:
-            scale = 768.0 / max_dim
-            img = img.resize((round(w * scale), round(h * scale)), Image.Resampling.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
-        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    """Downscale photo or video frame to max 768px JPEG and return base64 encoded string."""
+    if is_video_file(image_path):
+        img = extract_video_frame(image_path)
+    else:
+        with Image.open(image_path) as im:
+            img = ImageOps.exif_transpose(im)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+    if img is None:
+        return None
+    w, h = img.size
+    max_dim = max(w, h)
+    if max_dim > 768:
+        scale = 768.0 / max_dim
+        img = img.resize((round(w * scale), round(h * scale)), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
 def validate_and_clean_tags(raw):
@@ -819,13 +948,14 @@ def compute_palette_lab_dist(lab_pal1, lab_pal2):
 def load_overrides():
     """Load manual overrides from photos/overrides.json if present."""
     if not os.path.isfile(OVERRIDES_PATH):
-        return {"tags": {}, "never_pair": set(), "always_pair": set()}
+        return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}}
 
     try:
         with open(OVERRIDES_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         tags_overrides = data.get("tags") or {}
+        dates_overrides = data.get("dates") or {}
 
         def _norm_pair(pair):
             if not isinstance(pair, (list, tuple)) or len(pair) != 2:
@@ -846,12 +976,12 @@ def load_overrides():
 
         print(
             f"Loaded manual overrides from {OVERRIDES_PATH}: "
-            f"{len(tags_overrides)} tag overrides, {len(never_pair)} never_pair, {len(always_pair)} always_pair."
+            f"{len(tags_overrides)} tag overrides, {len(dates_overrides)} date overrides, {len(never_pair)} never_pair, {len(always_pair)} always_pair."
         )
-        return {"tags": tags_overrides, "never_pair": never_pair, "always_pair": always_pair}
+        return {"tags": tags_overrides, "never_pair": never_pair, "always_pair": always_pair, "dates": dates_overrides}
     except Exception as e:
         print(f"Warning: Failed to load overrides from {OVERRIDES_PATH}: {e}", file=sys.stderr)
-        return {"tags": {}, "never_pair": set(), "always_pair": set()}
+        return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}}
 
 
 def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2, never_pair=None, always_pair=None):
@@ -1093,16 +1223,16 @@ def sync_photos(takeout_dir=None, retag=False):
 
     # 1. Scan photos directory
     all_files = [f for f in os.listdir(PHOTOS_DIR) if not f.startswith(".")]
-    image_files = [
+    media_files = [
         f for f in all_files
-        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS and not f.startswith("photos.")
+        if os.path.splitext(f)[1].lower() in MEDIA_EXTENSIONS and not f.startswith("photos.")
     ]
 
-    print(f"Found {len(image_files)} image files in {PHOTOS_DIR}...")
+    print(f"Found {len(media_files)} media files in {PHOTOS_DIR}...")
 
     # 2. Hash and rename
     renamed_entries = []
-    for filename in sorted(image_files):
+    for filename in sorted(media_files):
         old_path = os.path.join(PHOTOS_DIR, filename)
         with open(old_path, "rb") as f:
             content = f.read()
@@ -1126,12 +1256,20 @@ def sync_photos(takeout_dir=None, retag=False):
     under_1080 = []
     for filename in unique_filenames:
         filepath = os.path.join(PHOTOS_DIR, filename)
-        dims = get_image_dimensions(filepath)
-        if not dims:
-            print(f"Warning: Could not read dimensions for {filename}", file=sys.stderr)
-            continue
-        w, h = dims
-        local_photos.append({"f": filename, "w": w, "h": h})
+        if is_video_file(filename):
+            vmeta = get_video_metadata(filepath)
+            if not vmeta:
+                print(f"Warning: Could not read video metadata for {filename}", file=sys.stderr)
+                continue
+            w, h, duration, _ = vmeta
+            local_photos.append({"f": filename, "w": w, "h": h, "duration": duration, "type": "video"})
+        else:
+            dims = get_image_dimensions(filepath)
+            if not dims:
+                print(f"Warning: Could not read dimensions for {filename}", file=sys.stderr)
+                continue
+            w, h = dims
+            local_photos.append({"f": filename, "w": w, "h": h, "type": "image"})
         if max(w, h) < 1080:
             under_1080.append((filename, w, h))
 
@@ -1165,8 +1303,16 @@ def sync_photos(takeout_dir=None, retag=False):
         t_date = t_info.get("date")
         t_geo = t_info.get("geo")
 
+        # Check manual date overrides
+        ov_date = None
+        if "dates" in overrides and isinstance(overrides["dates"], dict):
+            ov_date = overrides["dates"].get(filename) or overrides["dates"].get(chash)
+
         final_date = None
-        if exif_date:
+        if ov_date:
+            final_date = ov_date
+            date_counts["Override"] = date_counts.get("Override", 0) + 1
+        elif exif_date:
             final_date = exif_date
             date_counts[exif_date_src] += 1
         elif t_date:
@@ -1220,6 +1366,10 @@ def sync_photos(takeout_dir=None, retag=False):
             "palette": features["palette"],
             "phash": features["phash"],
         }
+        if p.get("type") == "video":
+            entry["type"] = "video"
+            if p.get("duration") is not None:
+                entry["duration"] = p["duration"]
         manifest.append(entry)
 
     # Sort manifest deterministically by filename

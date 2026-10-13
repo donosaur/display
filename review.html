@@ -221,7 +221,7 @@
     border: 1px solid var(--border);
   }
 
-  .thumb-wrap img {
+  .thumb-wrap img, .thumb-wrap video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -698,11 +698,25 @@
       photoCol.className = 'photo-col';
       var thumbWrap = document.createElement('div');
       thumbWrap.className = 'thumb-wrap';
-      var img = document.createElement('img');
-      img.src = '/photos/' + p.f;
-      img.loading = 'lazy';
-      img.alt = p.f;
-      thumbWrap.appendChild(img);
+      var isVid = (p.type === 'video') || /\.(mp4|webm|mov|m4v)$/i.test(p.f);
+      var mediaEl;
+      if (isVid) {
+        mediaEl = document.createElement('video');
+        mediaEl.src = '/photos/' + p.f;
+        mediaEl.muted = true;
+        mediaEl.defaultMuted = true;
+        mediaEl.playsInline = true;
+        mediaEl.setAttribute('playsinline', '');
+        mediaEl.setAttribute('muted', '');
+        mediaEl.loop = true;
+        mediaEl.autoplay = true;
+      } else {
+        mediaEl = document.createElement('img');
+        mediaEl.src = '/photos/' + p.f;
+        mediaEl.loading = 'lazy';
+        mediaEl.alt = p.f;
+      }
+      thumbWrap.appendChild(mediaEl);
       photoCol.appendChild(thumbWrap);
 
       // Palette bar
@@ -825,12 +839,27 @@
           row.className = 'partner-row';
           row.href = '#photo-' + pfn.replace('.', '-');
 
-          var pimg = document.createElement('img');
-          pimg.className = 'partner-thumb';
-          pimg.src = '/photos/' + pfn;
-          pimg.loading = 'lazy';
-          pimg.alt = pfn;
-          row.appendChild(pimg);
+          var isPartnerVid = /\.(mp4|webm|mov|m4v)$/i.test(pfn) || (partnerObj && partnerObj.type === 'video');
+          var pmedia;
+          if (isPartnerVid) {
+            pmedia = document.createElement('video');
+            pmedia.className = 'partner-thumb';
+            pmedia.src = '/photos/' + pfn;
+            pmedia.muted = true;
+            pmedia.defaultMuted = true;
+            pmedia.playsInline = true;
+            pmedia.setAttribute('playsinline', '');
+            pmedia.setAttribute('muted', '');
+            pmedia.loop = true;
+            pmedia.autoplay = true;
+          } else {
+            pmedia = document.createElement('img');
+            pmedia.className = 'partner-thumb';
+            pmedia.src = '/photos/' + pfn;
+            pmedia.loading = 'lazy';
+            pmedia.alt = pfn;
+          }
+          row.appendChild(pmedia);
 
           var details = document.createElement('div');
           details.className = 'partner-details';

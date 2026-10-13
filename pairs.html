@@ -481,7 +481,7 @@
     border-bottom: none;
   }
 
-  .view-stacked .photo-frame img {
+  .view-stacked .photo-frame img, .view-stacked .photo-frame video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -505,7 +505,7 @@
     background: #e7e5e4;
   }
 
-  .view-side .photo-frame img {
+  .view-side .photo-frame img, .view-side .photo-frame video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -540,10 +540,11 @@
     background: #e7e5e4;
   }
 
-  .view-compact .photo-frame img {
+  .view-compact .photo-frame img, .view-compact .photo-frame video {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   }
 
   .view-compact .card-meta {
@@ -1479,13 +1480,31 @@
       var stage = document.createElement('div');
       stage.className = 'photos-stage';
 
+      function createFrameMedia(p) {
+        var isVid = (p.type === 'video') || /\.(mp4|webm|mov|m4v)$/i.test(p.f);
+        if (isVid) {
+          var v = document.createElement('video');
+          v.src = '/photos/' + p.f;
+          v.muted = true;
+          v.defaultMuted = true;
+          v.playsInline = true;
+          v.setAttribute('playsinline', '');
+          v.setAttribute('muted', '');
+          v.loop = true;
+          v.autoplay = true;
+          return v;
+        }
+        var img = document.createElement('img');
+        img.src = '/photos/' + p.f;
+        img.loading = 'lazy';
+        img.alt = p.f;
+        return img;
+      }
+
       // Frame 1
       var frame1 = document.createElement('div');
       frame1.className = 'photo-frame';
-      var img1 = document.createElement('img');
-      img1.src = '/photos/' + pair.p1.f;
-      img1.loading = 'lazy';
-      img1.alt = pair.p1.f;
+      var img1 = createFrameMedia(pair.p1);
       frame1.appendChild(img1);
 
       var f1Info = document.createElement('div');
@@ -1503,10 +1522,7 @@
       // Frame 2
       var frame2 = document.createElement('div');
       frame2.className = 'photo-frame';
-      var img2 = document.createElement('img');
-      img2.src = '/photos/' + pair.p2.f;
-      img2.loading = 'lazy';
-      img2.alt = pair.p2.f;
+      var img2 = createFrameMedia(pair.p2);
       frame2.appendChild(img2);
 
       var f2Info = document.createElement('div');

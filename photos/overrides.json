@@ -15,5 +15,34 @@
       "d9d0a318a0.jpg"
     ]
   ],
-  "tags": {}
+  "tags": {
+    "ded31895ea.mp4": {
+      "scene": "indoor-home",
+      "mood": "calm",
+      "subjects": [
+        "cat"
+      ],
+      "people_count": "0",
+      "time_of_day": "day",
+      "event_hint": "everyday",
+      "is_bw": false,
+      "caption": "Sleeping cat"
+    },
+    "74a4bbcfe2.mp4": {
+      "scene": "travel-landmark",
+      "mood": "calm",
+      "subjects": [
+        "landscape"
+      ],
+      "people_count": "0",
+      "time_of_day": "indoor-unknown",
+      "event_hint": "trip",
+      "is_bw": false,
+      "caption": "Whale shark at Georgia Aquarium"
+    }
+  },
+  "dates": {
+    "ded31895ea.mp4": "2023-11-08T15:45:03",
+    "74a4bbcfe2.mp4": "2026-07-27T16:50:52"
+  }
 }

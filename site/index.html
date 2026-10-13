@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="ea6535e691">
+<meta name="build" content="3d5a73912d">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,7 +24,7 @@
     position: relative;
     overflow: hidden;
   }
-  .cell img.slide-img {
+  .cell img.slide-img, .cell video.slide-video {
     width: 100%; height: 100%;
     object-fit: cover;
     object-position: center;
@@ -63,11 +63,16 @@
     filter: blur(40px) brightness(0.5);
     transform: scale(1.2);
   }
+  .leftover-container video.backdrop {
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center;
+    pointer-events: none;
+  }
   .leftover-container .foreground {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
   }
-  .leftover-container .foreground img.slide-img {
+  .leftover-container .foreground img.slide-img, .leftover-container .foreground video.slide-video {
     width: 100%; height: 100%;
     object-fit: contain;
     object-position: center;
@@ -107,11 +112,100 @@
     pointer-events: none;
   }
   video#vkeep { position: fixed; width: 2px; height: 2px; opacity: 0.01; bottom: 0; left: 0; pointer-events: none; }
+
+  /* Info overlay: minimalist date, time, weather */
+  .info-overlay {
+    position: fixed;
+    bottom: max(3.5vh, env(safe-area-inset-bottom, 0px) + 16px);
+    left: max(3.5vw, env(safe-area-inset-left, 0px) + 16px);
+    z-index: 25;
+    background: rgba(14, 14, 16, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: clamp(16px, 2.2vh, 28px) clamp(20px, 2.5vw, 36px);
+    color: #f4f4f5;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.9s;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .info-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .info-time {
+    font-size: clamp(2.4rem, 5.5vw, 4rem);
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.035em;
+    font-variant-numeric: tabular-nums;
+    color: #f4f4f5;
+    display: flex;
+    align-items: baseline;
+  }
+  .info-ampm {
+    font-size: 0.38em;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: rgba(244, 244, 245, 0.6);
+    margin-left: 0.4em;
+    text-transform: uppercase;
+  }
+  .info-date {
+    font-size: clamp(0.95rem, 1.8vw, 1.25rem);
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: rgba(244, 244, 245, 0.85);
+    margin-top: 0.2rem;
+  }
+  .info-weather {
+    font-size: clamp(0.9rem, 1.6vw, 1.15rem);
+    font-weight: 400;
+    line-height: 1.3;
+    color: rgba(244, 244, 245, 0.65);
+    display: flex;
+    align-items: center;
+    gap: 0.55em;
+    margin-top: 0.1rem;
+  }
+  .info-dot {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.9em;
+  }
+  .info-weather:empty {
+    display: none;
+  }
+  @media (max-width: 600px) {
+    .info-overlay {
+      bottom: max(2vh, env(safe-area-inset-bottom, 0px) + 12px);
+      left: max(3vw, env(safe-area-inset-left, 0px) + 12px);
+      right: max(3vw, env(safe-area-inset-right, 0px) + 12px);
+      padding: 16px 20px;
+      max-width: calc(100vw - 6vw);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .info-overlay, .info-overlay.visible {
+      transition: opacity 0.05s ease !important;
+    }
+  }
 </style>
 </head>
 <body>
 <div id="slide-a" class="slide"></div>
 <div id="slide-b" class="slide"></div>
+<div id="info-overlay" class="info-overlay" aria-live="polite">
+  <div class="info-time" id="info-time"></div>
+  <div class="info-date" id="info-date"></div>
+  <div class="info-weather" id="info-weather"></div>
+</div>
 <button id="fsbtn" type="button">&#x26F6; fullscreen</button>
 <div id="tapstart">tap to keep awake</div>
 <div id="status-note">couldn't load photos, retrying</div>
@@ -177,7 +271,14 @@
     }
     return a;
   }
-  function photoSrc(p) { return typeof p === 'string' ? p : (p && p.src ? p.src : ''); }
+  function photoSrc(p) { return typeof p === 'string' ? p : (p && p.src ? p.src : (p && p.f ? ('photos/' + p.f) : '')); }
+
+  function isVideo(p) {
+    if (!p) return false;
+    if (p.type === 'video') return true;
+    var s = photoSrc(p);
+    return /\.(mp4|webm|mov|m4v)$/i.test(s);
+  }
 
   function loadImage(src) {
     return new Promise(function (resolve, reject) {
@@ -235,10 +336,94 @@
     });
   }
 
+  function loadVideo(src) {
+    return new Promise(function (resolve, reject) {
+      if (!src) { reject(new Error('Empty src')); return; }
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          reject(new Error('Video load timed out: ' + src));
+        }
+      }, 20000);
+
+      var video = document.createElement('video');
+      video.preload = 'auto';
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
+      video.loop = true;
+
+      function onReady() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(video);
+      }
+
+      function onErr() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error('Video failed to load: ' + src));
+      }
+
+      function cleanup() {
+        clearTimeout(timer);
+        video.removeEventListener('loadeddata', onReady);
+        video.removeEventListener('canplay', onReady);
+        video.removeEventListener('error', onErr);
+      }
+
+      if (video.readyState >= 2) {
+        onReady();
+        return;
+      }
+
+      video.addEventListener('loadeddata', onReady);
+      video.addEventListener('canplay', onReady);
+      video.addEventListener('error', onErr);
+
+      video.src = src;
+      video.load();
+    });
+  }
+
+  function loadMedia(photo) {
+    if (isVideo(photo)) {
+      return loadVideo(photoSrc(photo));
+    }
+    return loadImage(photoSrc(photo));
+  }
+
+  function createMediaElement(photo, preloadedMedia) {
+    if (isVideo(photo)) {
+      var video = preloadedMedia || document.createElement('video');
+      if (!video.src) video.src = photoSrc(photo);
+      video.preload = 'auto';
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
+      video.loop = true;
+      video.autoplay = true;
+      video.className = 'slide-video';
+      return video;
+    }
+    var img = preloadedMedia || new Image();
+    if (!img.src) img.src = photoSrc(photo);
+    img.className = 'slide-img';
+    return img;
+  }
+
   function preloadSlide(slide) {
     if (!slide || !slide.photos) return;
     for (var i = 0; i < slide.photos.length; i++) {
-      loadImage(photoSrc(slide.photos[i])).catch(function () {});
+      loadMedia(slide.photos[i]).catch(function () {});
     }
   }
 
@@ -324,6 +509,10 @@
       title += ' (' + photo.w + '×' + photo.h + ')';
     }
     lines.push(title);
+    if (isVideo(photo)) {
+      var durStr = photo.duration ? (photo.duration + 's') : 'unknown duration';
+      lines.push('type: video · ' + durStr);
+    }
     if (photo.w && photo.h) {
       var l = losses(photo, va);
       if (l) {
@@ -613,26 +802,14 @@
     return allSlides;
   }
 
-  function renderSlide(slideEl, slide, va, images) {
+  function renderSlide(slideEl, slide, va, mediaList) {
     slideEl.innerHTML = '';
     if (!slide || !slide.photos.length) return;
     if (slide.type === 'single') {
       var cell = document.createElement('div');
       cell.className = 'cell';
-      var img = (images && images[0]) ? images[0] : null;
-      if (!img && slide.photos[0]) {
-        img = new Image();
-        img.src = photoSrc(slide.photos[0]);
-      }
-      if (img) {
-        img.className = 'slide-img';
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.objectPosition = 'center';
-        img.style.display = 'block';
-        cell.appendChild(img);
-      }
+      var media = createMediaElement(slide.photos[0], mediaList && mediaList[0]);
+      cell.appendChild(media);
       if (DEBUG) {
         var b = createDebugBadge(slide.photos[0], va);
         if (b) cell.appendChild(b);
@@ -644,20 +821,8 @@
       for (var i = 0; i < slide.photos.length; i++) {
         var cell = document.createElement('div');
         cell.className = 'cell';
-        var img = (images && images[i]) ? images[i] : null;
-        if (!img && slide.photos[i]) {
-          img = new Image();
-          img.src = photoSrc(slide.photos[i]);
-        }
-        if (img) {
-          img.className = 'slide-img';
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          img.style.objectPosition = 'center';
-          img.style.display = 'block';
-          cell.appendChild(img);
-        }
+        var media = createMediaElement(slide.photos[i], mediaList && mediaList[i]);
+        cell.appendChild(media);
         if (DEBUG) {
           var b = createDebugBadge(slide.photos[i], va, slide.score, slide.pairType);
           if (b) cell.appendChild(b);
@@ -671,20 +836,8 @@
       for (var i = 0; i < slide.photos.length; i++) {
         var cell = document.createElement('div');
         cell.className = 'cell';
-        var img = (images && images[i]) ? images[i] : null;
-        if (!img && slide.photos[i]) {
-          img = new Image();
-          img.src = photoSrc(slide.photos[i]);
-        }
-        if (img) {
-          img.className = 'slide-img';
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          img.style.objectPosition = 'center';
-          img.style.display = 'block';
-          cell.appendChild(img);
-        }
+        var media = createMediaElement(slide.photos[i], mediaList && mediaList[i]);
+        cell.appendChild(media);
         if (DEBUG) {
           var b = createDebugBadge(slide.photos[i], va, slide.score);
           if (b) cell.appendChild(b);
@@ -695,29 +848,32 @@
     } else if (slide.type === 'leftover') {
       var container = document.createElement('div');
       container.className = 'leftover-container';
-      var bg = document.createElement('div');
-      bg.className = 'backdrop';
-      bg.style.backgroundImage = 'url("' + photoSrc(slide.photos[0]) + '")';
+      var p0 = slide.photos[0];
+      if (isVideo(p0)) {
+        var bgVideo = document.createElement('video');
+        bgVideo.className = 'backdrop';
+        bgVideo.src = photoSrc(p0);
+        bgVideo.muted = true;
+        bgVideo.defaultMuted = true;
+        bgVideo.playsInline = true;
+        bgVideo.setAttribute('playsinline', '');
+        bgVideo.setAttribute('muted', '');
+        bgVideo.loop = true;
+        bgVideo.autoplay = true;
+        container.appendChild(bgVideo);
+      } else {
+        var bg = document.createElement('div');
+        bg.className = 'backdrop';
+        bg.style.backgroundImage = 'url("' + photoSrc(p0) + '")';
+        container.appendChild(bg);
+      }
       var fg = document.createElement('div');
       fg.className = 'foreground';
-      var img = (images && images[0]) ? images[0] : null;
-      if (!img && slide.photos[0]) {
-        img = new Image();
-        img.src = photoSrc(slide.photos[0]);
-      }
-      if (img) {
-        img.className = 'slide-img';
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'contain';
-        img.style.objectPosition = 'center';
-        img.style.display = 'block';
-        fg.appendChild(img);
-      }
-      container.appendChild(bg);
+      var media = createMediaElement(p0, mediaList && mediaList[0]);
+      fg.appendChild(media);
       container.appendChild(fg);
       if (DEBUG) {
-        var b = createDebugBadge(slide.photos[0], va);
+        var b = createDebugBadge(p0, va);
         if (b) container.appendChild(b);
       }
       slideEl.appendChild(container);
@@ -727,7 +883,14 @@
   var showSeq = 0;
   var lastSlideChangeTime = Date.now();
   function getLongestSlideDuration() {
-    return Math.round(SLIDE_MS * Math.max(1, PAIR_HOLD));
+    var max = Math.round(SLIDE_MS * Math.max(1, PAIR_HOLD));
+    for (var i = 0; i < photos.length; i++) {
+      if (photos[i] && photos[i].duration && photos[i].duration > 0) {
+        var vMs = Math.round(photos[i].duration * 1000);
+        if (vMs > max) max = vMs;
+      }
+    }
+    return max;
   }
 
   function show(targetIdx) {
@@ -745,8 +908,8 @@
     var seq = ++showSeq;
 
     var loadPromises = targetSlide.photos.map(function (p) {
-      return loadImage(photoSrc(p)).then(function (img) {
-        return { photo: p, img: img, ok: true };
+      return loadMedia(p).then(function (mediaEl) {
+        return { photo: p, media: mediaEl, ok: true };
       }).catch(function (err) {
         return { photo: p, ok: false, err: err };
       });
@@ -818,20 +981,41 @@
         if (k) shownPhotosThisRound[k] = true;
       });
 
-      var loadedImages = results.map(function (r) { return r.img; });
-      targetSlide._images = loadedImages;
+      var loadedMedia = results.map(function (r) { return r.media; });
+      targetSlide._images = loadedMedia;
 
       slideIdx = curIdx;
       var back = 1 - front;
       var vp = getViewportSize();
       slides[back]._images = null;
-      renderSlide(slides[back], targetSlide, vp.va, loadedImages);
-      slides[back]._images = loadedImages;
+      renderSlide(slides[back], targetSlide, vp.va, loadedMedia);
+      slides[back]._images = loadedMedia;
       void slides[back].offsetWidth;
       slides[back].classList.add('visible');
       slides[front].classList.remove('visible');
+      var oldFront = front;
       front = back;
       lastSlideChangeTime = Date.now();
+
+      // Autoplay incoming slide videos unless reduced motion preferred
+      var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!prefersReducedMotion) {
+        var incomingVideos = slides[back].querySelectorAll('video');
+        for (var vi = 0; vi < incomingVideos.length; vi++) {
+          var v = incomingVideos[vi];
+          v.currentTime = 0;
+          var playPromise = v.play();
+          if (playPromise && playPromise.catch) playPromise.catch(function () {});
+        }
+      }
+
+      // Pause outgoing slide videos after crossfade completes (1.8s transition)
+      setTimeout(function () {
+        var outgoingVideos = slides[oldFront].querySelectorAll('video');
+        for (var ovi = 0; ovi < outgoingVideos.length; ovi++) {
+          outgoingVideos[ovi].pause();
+        }
+      }, 2000);
 
       // Preload next slide images in the background
       var nextSlide = slideQueue[(slideIdx + 1) % slideQueue.length];
@@ -844,10 +1028,24 @@
 
   var slideTimer = null;
   function getSlideDuration(slide) {
+    var base = SLIDE_MS;
     if (slide && (slide.type === 'pair' || slide.type === 'triple')) {
-      return Math.round(SLIDE_MS * PAIR_HOLD);
+      base = Math.round(SLIDE_MS * PAIR_HOLD);
     }
-    return SLIDE_MS;
+    if (slide && slide.photos) {
+      var maxVideoMs = 0;
+      for (var i = 0; i < slide.photos.length; i++) {
+        var p = slide.photos[i];
+        if (p && p.duration && p.duration > 0) {
+          var ms = Math.round(p.duration * 1000);
+          if (ms > maxVideoMs) maxVideoMs = ms;
+        }
+      }
+      if (maxVideoMs > 0) {
+        return Math.max(base, maxVideoMs);
+      }
+    }
+    return base;
   }
 
   function scheduleNext() {
@@ -939,6 +1137,8 @@
       if (item) {
         photos[j].w = item.w || photos[j].w;
         photos[j].h = item.h || photos[j].h;
+        photos[j].type = item.type || photos[j].type || (isVideo(item) ? 'video' : 'image');
+        photos[j].duration = item.duration !== undefined ? item.duration : photos[j].duration;
         photos[j].date = item.date || null;
         photos[j].geo = item.geo || null;
         photos[j].tags = item.tags || null;
@@ -961,6 +1161,7 @@
       if (!existingMap[newList[m].f]) {
         var newP = Object.assign({}, newList[m]);
         newP.src = 'photos/' + newList[m].f;
+        newP.type = newP.type || (isVideo(newP) ? 'video' : 'image');
         newP.partners = newList[m].partners || [];
         newP.alt = newList[m].alt || [];
         photos.push(newP);
@@ -1087,6 +1288,14 @@
 
     var curSlide = slideQueue[slideIdx];
     renderSlide(slides[front], curSlide, vp.va, curSlide ? curSlide._images : null);
+    var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!prefersReducedMotion) {
+      var currentVideos = slides[front].querySelectorAll('video');
+      for (var vi = 0; vi < currentVideos.length; vi++) {
+        var p = currentVideos[vi].play();
+        if (p && p.catch) p.catch(function () {});
+      }
+    }
     scheduleNext();
   }
   function onResize() {
@@ -1158,10 +1367,12 @@
   function initPhotos(list) {
     photos = list.map(function (item) {
       if (typeof item === 'string') {
-        return { f: item, src: item, w: 0, h: 0, partners: [], alt: [] };
+        return { f: item, src: item, w: 0, h: 0, type: (/\.(mp4|webm|mov|m4v)$/i.test(item) ? 'video' : 'image'), partners: [], alt: [] };
       }
       var p = Object.assign({}, item);
       p.src = 'photos/' + item.f;
+      p.type = p.type || (isVideo(p) ? 'video' : 'image');
+      p.duration = p.duration !== undefined ? p.duration : (item.duration || null);
       p.partners = item.partners || [];
       p.alt = item.alt || [];
       return p;
@@ -1315,7 +1526,223 @@
     if (document.visibilityState === 'visible') { requestLock(); keepAudio(); keepVideo(); goFullscreen(); }
   });
 
-  /* ---------- gesture handling (arms on first, advances on later) ---------- */
+  /* ================= DATE, TIME, WEATHER INFO OVERLAY ================= */
+  var INFO_OVERLAY_MS = 14000;
+  var infoOverlayEl = document.getElementById('info-overlay');
+  var infoTimer = null;
+  var infoClockTicker = null;
+  var CLOCK_24 = urlParams.get('clock') === '24';
+
+  var WMO_WEATHER_MAP = {
+    0: { day: 'Sunny', night: 'Clear' },
+    1: { day: 'Mostly sunny', night: 'Mostly clear' },
+    2: { day: 'Partly cloudy', night: 'Partly cloudy' },
+    3: { day: 'Overcast', night: 'Overcast' },
+    45: { day: 'Foggy', night: 'Foggy' },
+    48: { day: 'Freezing fog', night: 'Freezing fog' },
+    51: { day: 'Light drizzle', night: 'Light drizzle' },
+    53: { day: 'Drizzle', night: 'Drizzle' },
+    55: { day: 'Heavy drizzle', night: 'Heavy drizzle' },
+    56: { day: 'Light freezing drizzle', night: 'Light freezing drizzle' },
+    57: { day: 'Freezing drizzle', night: 'Freezing drizzle' },
+    61: { day: 'Light rain', night: 'Light rain' },
+    63: { day: 'Rain', night: 'Rain' },
+    65: { day: 'Heavy rain', night: 'Heavy rain' },
+    66: { day: 'Light freezing rain', night: 'Light freezing rain' },
+    67: { day: 'Freezing rain', night: 'Freezing rain' },
+    71: { day: 'Light snow', night: 'Light snow' },
+    73: { day: 'Snow', night: 'Snow' },
+    75: { day: 'Heavy snow', night: 'Heavy snow' },
+    77: { day: 'Snow grains', night: 'Snow grains' },
+    80: { day: 'Light showers', night: 'Light showers' },
+    81: { day: 'Showers', night: 'Showers' },
+    82: { day: 'Heavy showers', night: 'Heavy showers' },
+    85: { day: 'Light snow showers', night: 'Light snow showers' },
+    86: { day: 'Snow showers', night: 'Snow showers' },
+    95: { day: 'Thunderstorm', night: 'Thunderstorm' },
+    96: { day: 'Thunderstorm with hail', night: 'Thunderstorm with hail' },
+    99: { day: 'Thunderstorm with hail', night: 'Thunderstorm with hail' }
+  };
+
+  function getWeatherCondition(code, isDay) {
+    var entry = WMO_WEATHER_MAP[code];
+    if (!entry) return isDay ? 'Clear' : 'Clear';
+    return isDay ? entry.day : entry.night;
+  }
+
+  var cachedWeather = null;
+  var lastWeatherFetchTime = 0;
+  var weatherFetchInFlight = false;
+  var activeLat = null;
+  var activeLon = null;
+
+  try {
+    var rawCache = localStorage.getItem('display_weather');
+    if (rawCache) {
+      cachedWeather = JSON.parse(rawCache);
+    }
+  } catch (err) {}
+
+  function renderWeatherUI(w) {
+    var el = document.getElementById('info-weather');
+    if (!el) return;
+    if (!w || w.temp === undefined || w.temp === null) {
+      el.innerHTML = '';
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'flex';
+    var tempStr = Math.round(w.temp) + '°';
+    var condStr = w.condition || '';
+    if (condStr) {
+      el.innerHTML = '<span class="info-temp">' + tempStr + '</span><span class="info-dot">·</span><span class="info-condition">' + condStr + '</span>';
+    } else {
+      el.innerHTML = '<span class="info-temp">' + tempStr + '</span>';
+    }
+  }
+
+  function fetchWeather(userLat, userLon) {
+    if (weatherFetchInFlight) return;
+    var latParam = parseFloat(urlParams.get('lat'));
+    var lonParam = parseFloat(urlParams.get('lon'));
+    var lat = (userLat !== undefined && userLat !== null) ? userLat : (!isNaN(latParam) ? latParam : (activeLat || 40.6782));
+    var lon = (userLon !== undefined && userLon !== null) ? userLon : (!isNaN(lonParam) ? lonParam : (activeLon || -73.9442));
+    activeLat = lat;
+    activeLon = lon;
+
+    var unit = (urlParams.get('temp') === 'c' || urlParams.get('units') === 'c') ? 'celsius' : 'fahrenheit';
+    weatherFetchInFlight = true;
+
+    var apiUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + Number(lat).toFixed(4) +
+      '&longitude=' + Number(lon).toFixed(4) +
+      '&current=temperature_2m,weather_code,is_day&temperature_unit=' + unit +
+      '&timezone=auto';
+
+    fetch(apiUrl)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        weatherFetchInFlight = false;
+        if (!data || !data.current) return;
+        var isDay = data.current.is_day !== 0;
+        var cond = getWeatherCondition(data.current.weather_code, isDay);
+        var w = {
+          temp: data.current.temperature_2m,
+          condition: cond,
+          time: Date.now()
+        };
+        cachedWeather = w;
+        lastWeatherFetchTime = Date.now();
+        renderWeatherUI(w);
+        try {
+          localStorage.setItem('display_weather', JSON.stringify(w));
+        } catch (e) {}
+      })
+      .catch(function () {
+        weatherFetchInFlight = false;
+        if (cachedWeather) {
+          renderWeatherUI(cachedWeather);
+        }
+      });
+  }
+
+  function initLocationAndWeather() {
+    if (cachedWeather) {
+      renderWeatherUI(cachedWeather);
+    }
+    var latParam = parseFloat(urlParams.get('lat'));
+    var lonParam = parseFloat(urlParams.get('lon'));
+    if (!isNaN(latParam) && !isNaN(lonParam)) {
+      fetchWeather(latParam, lonParam);
+      return;
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          fetchWeather(pos.coords.latitude, pos.coords.longitude);
+        },
+        function () {
+          fetchWeather(40.6782, -73.9442);
+        },
+        { timeout: 8000, maximumAge: 1800000 }
+      );
+    } else {
+      fetchWeather(40.6782, -73.9442);
+    }
+  }
+
+  function updateClock() {
+    var now = new Date();
+    var timeEl = document.getElementById('info-time');
+    var dateEl = document.getElementById('info-date');
+    if (!timeEl || !dateEl) return;
+
+    var h = now.getHours();
+    var m = now.getMinutes();
+    var mStr = (m < 10 ? '0' : '') + m;
+
+    if (CLOCK_24) {
+      var hStr = (h < 10 ? '0' : '') + h;
+      timeEl.innerHTML = hStr + ':' + mStr;
+    } else {
+      var ampm = h >= 12 ? 'PM' : 'AM';
+      var h12 = h % 12;
+      if (h12 === 0) h12 = 12;
+      timeEl.innerHTML = h12 + ':' + mStr + ' <span class="info-ampm">' + ampm + '</span>';
+    }
+
+    var options = { weekday: 'long', month: 'long', day: 'numeric' };
+    dateEl.textContent = now.toLocaleDateString('en-US', options);
+  }
+
+  function showInfoOverlay() {
+    if (!infoOverlayEl) {
+      infoOverlayEl = document.getElementById('info-overlay');
+    }
+    if (!infoOverlayEl) return;
+
+    updateClock();
+    if (cachedWeather) {
+      renderWeatherUI(cachedWeather);
+    }
+    if (!lastWeatherFetchTime || (Date.now() - lastWeatherFetchTime > 15 * 60 * 1000)) {
+      fetchWeather(activeLat, activeLon);
+    }
+
+    infoOverlayEl.classList.add('visible');
+
+    if (infoTimer) {
+      clearTimeout(infoTimer);
+    }
+    infoTimer = setTimeout(function () {
+      hideInfoOverlay();
+    }, INFO_OVERLAY_MS);
+
+    if (!infoClockTicker) {
+      infoClockTicker = setInterval(updateClock, 1000);
+    }
+  }
+
+  function hideInfoOverlay() {
+    if (!infoOverlayEl) {
+      infoOverlayEl = document.getElementById('info-overlay');
+    }
+    if (infoOverlayEl) {
+      infoOverlayEl.classList.remove('visible');
+    }
+    if (infoTimer) {
+      clearTimeout(infoTimer);
+      infoTimer = null;
+    }
+    if (infoClockTicker) {
+      clearInterval(infoClockTicker);
+      infoClockTicker = null;
+    }
+  }
+
+  /* ---------- gesture handling (arms on first, shows info overlay) ---------- */
   var tapEl = document.getElementById('tapstart');
   function showTapStart() { tapEl.classList.add('show'); }
   function hideTapStart() { tapEl.classList.remove('show'); }
@@ -1328,6 +1755,17 @@
     goFullscreen();
     armed = true;
   }
+
+  var pointerStartX = 0;
+  var pointerStartY = 0;
+  var pointerStartTime = 0;
+
+  document.addEventListener('pointerdown', function (e) {
+    pointerStartX = e.clientX;
+    pointerStartY = e.clientY;
+    pointerStartTime = Date.now();
+  });
+
   document.addEventListener('pointerup', function (e) {
     var isFsTarget = e.target && (e.target.id === 'fsbtn' || (e.target.closest && e.target.closest('#fsbtn')));
     if (!isFsTarget && !isFullscreen()) {
@@ -1337,12 +1775,54 @@
 
     if (!armed) {
       arm();
+    }
+
+    var deltaX = e.clientX - pointerStartX;
+    var deltaY = e.clientY - pointerStartY;
+    var elapsed = Date.now() - pointerStartTime;
+
+    // Horizontal swipe to advance/reverse slides (deliberate swipe > 60px within 600ms)
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 600) {
+      if (deltaX < 0) {
+        next();
+      } else {
+        if (slideQueue.length > 0) {
+          var prevIdx = (slideIdx - 1 + slideQueue.length) % slideQueue.length;
+          show(prevIdx);
+        }
+      }
       return;
     }
-    next();
+
+    // Touch/tap displays the minimalist date, time, and weather overlay
+    // The slideshow continues running in the background uninterrupted
+    showInfoOverlay();
+  });
+
+  // Keyboard navigation bonus for accessibility, desktop controls, and testing
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+      next();
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      if (slideQueue.length > 0) {
+        var prevIdx = (slideIdx - 1 + slideQueue.length) % slideQueue.length;
+        show(prevIdx);
+      }
+    } else if (e.key === 'i' || e.key === 't' || e.key === 'w') {
+      showInfoOverlay();
+    }
   });
 
   /* ---------- go ---------- */
+  initLocationAndWeather();
+  setInterval(function () {
+    fetchWeather(activeLat, activeLon);
+  }, 15 * 60 * 1000);
+
+  if (urlParams.get('overlay') === '1') {
+    showInfoOverlay();
+  }
+
   requestLock();
   keepAudio();
   keepVideo();
@@ -1358,7 +1838,8 @@
   }
 
   /* ---------- expose kiosk state for diagnostics and testing ---------- */
-  if (DEBUG) {
+  var exposeDiagnostics = DEBUG || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (exposeDiagnostics) {
     window.__kiosk = {
       getPhotos: function() { return photos; },
       getQueue: function() { return slideQueue; },
@@ -1376,7 +1857,19 @@
       next: next,
       wrapQueue: wrapQueue,
       handleResize: handleResize,
-      loadImage: loadImage
+      loadImage: loadImage,
+      loadMedia: loadMedia,
+      isVideo: isVideo,
+      showInfoOverlay: showInfoOverlay,
+      hideInfoOverlay: hideInfoOverlay,
+      isInfoOverlayVisible: function () {
+        return infoOverlayEl ? infoOverlayEl.classList.contains('visible') : false;
+      },
+      getInfoOverlayEl: function () { return infoOverlayEl; },
+      getCachedWeather: function () { return cachedWeather; },
+      fetchWeather: fetchWeather,
+      renderWeatherUI: renderWeatherUI,
+      updateClock: updateClock
     };
   }
 })();
