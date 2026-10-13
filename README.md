@@ -4,15 +4,26 @@ A self-contained photo slideshow kiosk for the Echo Show 15's Silk browser, depl
 
 ## Files
 
-- `index.html` — single-file kiosk application (responsive pairing layout, score-weighted partner matching, smooth image decoding, stay-awake stack, fullscreen)
-- `review.html` — standalone desktop review tool to inspect photo tags, captions, dates, and top 3 partners with scores (not linked from kiosk)
-- `photos/` — slideshow images named by 10-character SHA1 content hash
-  - `photos.json` — compact manifest with dimensions, dates, geo, visual tags, color features, and precomputed top partner scores
+- `site/` — deployable kiosk application published to Netlify (`publish = "site"`)
+  - `index.html` — single-file kiosk application (responsive pairing layout, color fallback matching, smooth image decoding, stay-awake stack, fullscreen)
+  - `sw.js` — service worker for offline runtime caching and postMessage photo pruning
+  - `photos/` — slideshow images named by 10-character SHA1 content hash and compact `photos.json` manifest
+- `pairs.html` — standalone review and curation UI to confirm or deny pairings (served via `serve.py` at `/tools/pairs.html` or `/pairs.html`)
+- `review.html` — standalone desktop review tool to inspect photo tags, captions, dates, and partner rankings (`/tools/review.html`)
+- `compare.html` — interactive split slider and side-by-side comparison tool for AI-upscaled photos (`/tools/compare.html`)
+- `photos/` — internal/private photo metadata and archives (not published to production)
+  - `.tags-cache.json` — cached Claude API visual tags keyed by content hash (tracked in git)
+  - `overrides.json` — manual pairing overrides (`always_pair`, `never_pair`) and tag corrections
   - `photos.debug.json` — formatted copy of manifest for human inspection (gitignored)
-  - `.tags-cache.json` — cached Claude API visual tags keyed by content hash
-  - `overrides.json` — optional manual overrides for tags and pairings
-- `scripts/sync-photos.py` — sync script to hash images, extract dates/geo, run Claude visual tagging, compute local color features, score pairs, and write manifests
-- `netlify.toml` — headers configuration (immutable cache for hashed photos, no-cache for index and manifest)
+  - `quality-report.json` — resolution, sharpness, and quality tier audit
+  - `originals/` — backups of original low-resolution photos before AI upscaling
+  - `comparisons/` — before-and-after image crops for upscale inspection
+- `scripts/`
+  - `sync-photos.py` — sync script to hash images, extract metadata, run tagging, compute color compatibility, score partners and alts, and write manifests
+  - `serve.py` — local development and review server with path lockdown, same-origin enforcement, and atomic write endpoints
+  - `upscale-photos.py` — automated Real-ESRGAN upscaling pipeline
+  - `inspect-quality.py` — resolution and Laplacian sharpness inspector
+- `netlify.toml` — headers and build configuration (`publish = "site"`)
 - `README.md` — documentation
 - `HANDOFF.md` — project handoff state
 
@@ -27,15 +38,16 @@ To prevent mismatched photo orientations from being heavily cropped, the slidesh
 - Calculates loss for full viewport (`ca = va`) and half cell (`ca = 2 * va` in portrait, `ca = va / 2` in landscape).
 - Images with half-cell crop loss at least 0.15 lower than full-viewport loss are marked pairable. In portrait (va < 1), this pairs landscape photos; in landscape, it pairs portrait photos. Near-square and well-fitting images stay single.
 - In `buildSlideQueue()`:
-  1. The pairable set is shuffled at the start of each round.
+  1. The pairable set is shuffled at the start of each round (unless `?shuffle=0`, which enforces deterministic order).
   2. For each unpaired photo, candidates are selected from its precomputed `partners` list that are unused this round, pairable in the current viewport, and have score >= 0.20.
   3. A partner is chosen at random among the top 3 qualifying candidates, weighted by score. This ensures pairs vary naturally across rounds while prioritizing the best matches.
   4. Leftovers pass: remaining unpaired photos attempt to pair with any other unused pairable photo where compatibility score > 0.
-  5. Fallback pass: any remaining unused pairable photos are paired together sequentially (score 0).
-  6. If an odd pairable photo remains, it renders uncropped (`contain`) over a blurred, darkened, scaled backdrop of itself (`filter: blur(40px) brightness(0.5); transform: scale(1.2)`).
-  7. Event spreading: the queue reorders adjacent slides where possible to avoid showing two consecutive slides from the same calendar date.
+  5. Color-compatibility fallback pass: photos that still have no date or semantic partner pair by visual color harmony alone (`alt` partners in manifest, picking weighted among top 3). This reduced random sequential pairings from 56.3% (40/71) down to ~15–18% (11–13/71).
+  6. Final fallback pass: any remaining unused pairable photos are paired together sequentially (tagged as `random` in debug overlay, score 0).
+  7. If an odd pairable photo remains, it renders uncropped (`contain`) over a blurred, darkened, scaled backdrop of itself (`filter: blur(40px) brightness(0.5); transform: scale(1.2)`).
+  8. Event spreading: the queue reorders adjacent slides where possible to avoid showing two consecutive slides from the same calendar date.
 - Paired slides split the screen with a 3px black gap (stacked top/bottom in portrait, side-by-side in landscape).
-- Rebuilds the queue on `resize` and `orientationchange` (debounced ~300ms), maintaining the currently viewed photo on screen.
+- **Round preservation**: the kiosk tracks photos shown this round (`shownPhotosThisRound`). When the queue is rebuilt mid-round due to an orientation change (`handleResize()`) or a single failed image load (`show()`), it preserves the current slide and rebuilds remaining slides exclusively from photos not yet shown, preventing repeats and skips. A fresh shuffle occurs strictly at the round wrap.
 
 ### Pair scoring model & weights
 
@@ -140,19 +152,22 @@ Optional file `photos/overrides.json` to manually adjust tags and pairings witho
   - Direct links to review individual photo pairings in `pairs.html`.
 
 - **Local review server (`scripts/serve.py`)**:
-  - Run `python3 scripts/serve.py 8088` to serve the kiosk and review tools locally with live POST endpoints for `/api/overrides` and `/api/sync`.
+  - Run `python3 scripts/serve.py 8088` to serve the kiosk (`site/` at `/`) and review tools (`/tools/` and root `.html` files) locally.
+  - Binds strictly to `127.0.0.1` by default (opt into LAN via `--lan`).
+  - Security lockdown: refuses path segments starting with `.` (403 for `.env`, `.git`), `scripts/`, and `photos/originals/`. Rejects cross-origin POSTs whose `Origin` does not match the server's own `Host`.
+  - Atomic write endpoints for `/api/overrides` (writing to a temporary file before atomic `os.replace`) and a 15-minute timeout on `/api/sync`.
 
 ### Stay-awake stack & kiosk resilience
 
 Silk returns to the Echo Show home screen after ~10–15 minutes of idle time, and kiosks run unattended for days over Wi-Fi. The kiosk uses a multi-layer keep-awake and network resilience approach:
 1. **Screen Wake Lock API**: requested on start, on visibility changes, every 60s, and re-requested in the `release` event handler when the document is visible.
 2. **Audio keepalive**: looping silent audio base64 (`?audio=unmuted` enables 1% volume mode if required).
-3. **Canvas video fallback**: hidden looping 2px canvas video stream via `captureStream()`.
+3. **Canvas video fallback**: hidden 2×2 canvas with an active 1s `setInterval` pixel toggle, connected via `captureStream(1)` only after window `'load'` (or immediate if complete) so page load completes normally without timing out browser readyState.
 4. **Tap-to-start overlay**: non-blocking translucent pill in the bottom corner ("tap to keep awake") that leaves the slideshow playing underneath. Any tap anywhere arms wake lock and audio.
-5. **Auto-hiding fullscreen button**: hides 10s after load (and immediately on arm); reappears for 10s on any tap while not fullscreen. Tapping it calls `arm()` directly.
+5. **Auto-hiding fullscreen button**: hides 10s after load (and immediately on arm); reappears for 10s on any tap while not fullscreen. Tapping it calls `arm()` directly. The `?debug=1` badge is positioned in the top-left to avoid colliding with fullscreen controls.
 6. **Soft refresh & maintenance**:
    - Re-fetches `photos/photos.json` every hour with `cache: 'no-cache'`. If changed, updates `photos` and rebuilds the queue seamlessly at the next wrap.
-   - Re-fetches `/` every hour with `cache: 'no-store'`, checks `<meta name="build" content="...">`, and reloads only if the build string changed and the browser is online.
+   - Re-fetches `/` every hour with `cache: 'no-store'`, checks `<meta name="build" content="...">` (computed deterministically from a SHA256 hash of `index.html` and `sw.js`), and reloads only if the code changed and the browser is online.
    - Never reloads while offline.
    - Fallback full reload: only if the page has been running continuously for more than 7 days, at 4:00 AM local time, and online.
 7. **Transient failure handling**:
@@ -164,8 +179,9 @@ Silk returns to the Echo Show home screen after ~10–15 minutes of idle time, a
    - Watchdog timer: calls `next()` if no slide transition occurs within $3 \times$ the longest slide duration while the document is visible.
 9. **Offline caching via Service Worker (`sw.js`)**:
    - Runtime cache-first strategy for immutable hashed photos (`/photos/*.jpg`, `.jpeg`, `.png`, `.webp`).
-   - Network-first strategy (falling back to cache) for `/`, `/index.html`, and `/photos/photos.json`.
+   - Network-first strategy (falling back to cache) for `/`, `/index.html`, and `/photos/photos.json` (cached under a single `/photos/photos.json` key regardless of query parameters).
    - On activate, cleans up cached photos no longer referenced in the latest manifest.
+   - Proactive runtime pruning: sends a `postMessage` (`PRUNE_PHOTOS`) to the service worker after each successful `photos.json` refresh in the page to evict deleted photos from cache immediately.
 
 ## URL parameters
 

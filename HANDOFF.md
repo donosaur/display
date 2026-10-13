@@ -1,26 +1,18 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat(pairs): add dedicated UI to review, confirm, and deny photo pairings (antigravity, 2026-10-12 23:37 EDT)
+- Last save (MBP M3): feat(all): headless Chromium audit fixes and security lockdown across 8 items (antigravity, 2026-10-13 11:35 EDT)
 - Completed:
-  - Fixed resize resetting to slide 0 bug in `handleResize()` using a `found` flag, avoided unnecessary queue rebuilds when pairable flags are unchanged, incremented `showSeq`, and rescheduled auto-advance timer.
-  - Handled transient photo failures gracefully without dropping from `photos`: tracked failures per photo in map, skipped failed photos for remainder of round, only permanently removed after 3 online failures with intervening success, and added 3-in-a-row network outage hold with 30s retries.
-  - Added 20s timeout to `loadImage` and watchdog timer that advances if no slide changes in $3\times$ longest duration.
-  - Replaced nightly 4am hard reload with soft hourly `photos.json` re-fetch/merge, build version check via `<meta name="build">` against `/`, and 7-day fallback reload.
-  - Redesigned `#tapstart` from full-screen dark overlay to small translucent corner pill ("tap to keep awake") with slideshow running underneath; made fullscreen button auto-hide after 10s and re-appear on tap, calling `arm()` on tap.
-  - Added service worker (`sw.js`) for runtime caching (cache-first for hashed photos, network-first for shell and manifest, pruning stale photos on activate) with `no-cache` header in `netlify.toml`.
-  - Replaced CSS background image rendering with decoded `<img>` elements using `object-fit: cover` and `contain`, dropping old references on slide change.
-  - Added optional 3-up vertical stacking for wide (16:9) photos in portrait (mirror in landscape) behind `?stack=3`, choosing triplets by partner score and displaying 3rd-cell loss in debug overlay.
-  - Simplified sync script environment setup by removing `sys.path` venv injection, added `scripts/requirements.txt`, supported repo-local `.env` file for `ANTHROPIC_API_KEY`, and added `.env` to `.gitignore`.
-  - Cleaned up cache rules in `netlify.toml` for `.jpeg/.png/.webp`, restricted `window.__kiosk` to `?debug=1`, re-requested screen wake lock on release when visible, and consolidated crop loss calculation into `losses(img, va)`.
-  - Pruned 23 additional photos removed from Google Photos album in round 2, updating `photos.json` manifest down from 321 to 298 photos.
-  - Replaced 58 low-resolution photos with AI-upscaled versions (backing up originals in `photos/originals/`), verifying 0 of the 74 previously pruned photos were restored.
-  - Identified 5 duplicate photo pairs via DCT perceptual hashing and Laplacian sharpness audits; pruned the 5 lower-quality duplicates (`59d579137c.jpg`, `b519110580.jpg`, `f8330690af.jpg`, `02fe88b041.jpg`, `5448d2c568.jpg`) and kept the dated, sharper, higher-resolution masters, reducing manifest count from 298 to 293 photos.
-  - Built interactive pairing review UI (`pairs.html`) with Kiosk Split (portrait 1080×1920 9:16), Side-by-Side, and Compact Grid modes, keyboard shortcuts (<kbd>C</kbd>/<kbd>D</kbd>/<kbd>R</kbd>), and deep linking.
-  - Created `scripts/serve.py` review server with POST `/api/overrides` and `/api/sync` endpoints to persist manual overrides to `photos/overrides.json` and recompute scores in one click.
-  - Applied user's initial manual overrides (`5828f3b0b8`+`9be860e116` confirmed as priority 1.0; `16df09b0ea`+`7e8cb7542a` and `9b83482d6d`+`d9d0a318a0` denied) and pushed live to `display.polisti.co`. Unapproved pairings with score $\ge 0.2$ continue to pair naturally without requiring manual approval.
+  1. **Canvas keepalive load hang fix**: Deferred `captureStream` until after window `'load'` (or immediate if readyState complete), active 1s `setInterval` frame drawing (toggling 1px fill), and added keepalive status readout (`audio playing (rs 4) · video playing (rs 4)`) in `?debug=1`. Verified page load completes with readyState "complete" in ~1.5s.
+  2. **Deterministic build hash & regex cleanup**: Fixed `sync-photos.py` regex to consume `\s*/?>` preventing stray `>>>>>` text nodes in `<body>`. Replaced timestamp-based bumping with a deterministic 10-char SHA256 hash of `index.html` (excluding build meta line) and `sw.js`. Re-running sync without code changes leaves `index.html` byte-identical.
+  3. **Server lockdown (`scripts/serve.py`)**: Bound server to `127.0.0.1` by default (`--lan` flag opts into `0.0.0.0`). Added 403 Forbidden for hidden files/segments (`.env`, `.git`), `scripts/`, and `photos/originals/`. Dropped wildcard CORS and enforced same-origin origin checks on POST requests. Extended `/api/sync` timeout to 15 minutes and implemented atomic file writes via `.tmp` and `os.replace`.
+  4. **Color compatibility pairing fallback**: Extended `sync-photos.py` to precompute top 5 color matches (`alt`) based on visual color distance. Added Pass 2b in `buildSlideQueue` to pick from `alt` partners (top 3, weighted by score) before falling back to sequential pairing. Tagged slides as `partner`, `alt`, or `random`, surfacing badges in `?debug=1` and `pairs.html`. Reduced random sequential pairing share from 56.3% (40/71) down to ~15.5% (11/71).
+  5. **Round preservation across rebuilds**: Added `shownPhotosThisRound` tracking. Mid-round queue rebuilds caused by orientation change (`handleResize`) or load errors (`show`) now adapt the current slide and rebuild remaining slides strictly from photos not yet shown. Fresh shuffle occurs exclusively at round wrap. `buildSlideQueue` and partner selection now respect `?shuffle=0` deterministically.
+  6. **Published site isolation (`site/`)**: Moved deployable kiosk files into `site/` (`index.html`, `sw.js`, `photos/*.jpg`, `photos/photos.json`) and configured Netlify `publish = "site"`. Kept review tools (`pairs.html`, `review.html`, `compare.html`, `scripts/`, `photos/overrides.json`, `photos/quality-report.json`) at repo root. Updated `serve.py` to route `site/` at `/` and tools at `/tools/` and root URLs. Updated all script and tool asset paths.
+  7. **Service worker housekeeping**: Added proactive `postMessage` (`PRUNE_PHOTOS`) from the page to the service worker on every successful `photos.json` fetch/refresh to prune removed photos immediately. Normalized `photos.json` cache key to `/photos/photos.json` ignoring search queries.
+  8. **UI & repository housekeeping**: Relocated `?debug=1` overlay badge from bottom-left to top-left so it no longer overlaps the fullscreen button. Removed `photos/.tags-cache.json` from `.gitignore` and committed it to preserve paid tagging results. Deleted `upscaled-photos.zip` from working tree while preserving all originals under `photos/originals/`.
 - In flight: none.
 - Inbound: none.
 - Next:
   - Run sync with Google Takeout folder once exported to populate remaining dates and GPS coordinates.
-  - Set `ANTHROPIC_API_KEY` to populate visual tags across all 293 photos.
+  - Set `ANTHROPIC_API_KEY` to populate visual tags across untagged photos.
   - Test on real Echo Show 15 to verify idle timeout behavior (default muted vs `?audio=unmuted`) and record confirmed mode in README.
