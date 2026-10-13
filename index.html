@@ -280,6 +280,12 @@
     return null;
   }
 
+  var photoFailures = {};
+  var roundFailedPhotos = {};
+  var globalSuccessLoads = 0;
+  var consecutiveSlideFailures = 0;
+  var retryTimer = null;
+
   function buildSlideQueue(list, va) {
     if (!list || !list.length) return [];
 
@@ -290,6 +296,8 @@
 
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
+      var key = p.f || p.src;
+      if (roundFailedPhotos[key]) continue;
       photoMap[p.f] = p;
       if (isPairable(p, va)) {
         isPairMap[p.f] = true;
@@ -317,7 +325,7 @@
       for (var k = 0; k < partners.length; k++) {
         var candidateFn = partners[k][0];
         var candidateScore = partners[k][1];
-        if (!used[candidateFn] && isPairMap[candidateFn] && candidateFn !== p1.f && candidateScore >= 0.2) {
+        if (!used[candidateFn] && !roundFailedPhotos[candidateFn] && isPairMap[candidateFn] && candidateFn !== p1.f && candidateScore >= 0.2) {
           validCandidates.push(partners[k]);
           if (validCandidates.length >= 3) break;
         }
@@ -344,7 +352,7 @@
       var bestScore = 0;
       for (var j = i + 1; j < leftovers.length; j++) {
         var p2 = leftovers[j];
-        if (used[p2.f]) continue;
+        if (used[p2.f] || roundFailedPhotos[p2.f]) continue;
 
         var sc = 0;
         var p1Partners = p1.partners || [];
@@ -479,16 +487,52 @@
 
       var failed = results.filter(function (r) { return !r.ok; });
       if (failed.length > 0) {
-        var badPhotos = failed.map(function (r) { return r.photo; });
-        photos = photos.filter(function (p) {
-          return !badPhotos.some(function (b) { return (b.f && b.f === p.f) || b.src === p.src; });
+        consecutiveSlideFailures++;
+
+        failed.forEach(function (r) {
+          var p = r.photo;
+          var key = p.f || p.src;
+          roundFailedPhotos[key] = true;
+
+          if (navigator.onLine !== false) {
+            var rec = photoFailures[key] || { count: 0, lastSuccess: -1 };
+            if (rec.count === 0 || globalSuccessLoads > rec.lastSuccess) {
+              rec.count++;
+              rec.lastSuccess = globalSuccessLoads;
+            }
+            photoFailures[key] = rec;
+            if (rec.count >= 3) {
+              photos = photos.filter(function (x) {
+                return (x.f && x.f !== key) && x.src !== key;
+              });
+            }
+          }
         });
+
+        if (consecutiveSlideFailures >= 3) {
+          if (slideTimer) { clearTimeout(slideTimer); slideTimer = null; }
+          if (retryTimer) { clearTimeout(retryTimer); }
+          retryTimer = setTimeout(function () {
+            show(curIdx);
+          }, 30000);
+          return;
+        }
+
         var vp = getViewportSize();
         slideQueue = buildSlideQueue(photos, vp.va);
-        if (!slideQueue.length) return;
+        if (!slideQueue.length) {
+          if (slideTimer) { clearTimeout(slideTimer); slideTimer = null; }
+          if (retryTimer) { clearTimeout(retryTimer); }
+          retryTimer = setTimeout(function () { show(0); }, 30000);
+          return;
+        }
         show(curIdx);
         return;
       }
+
+      consecutiveSlideFailures = 0;
+      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+      globalSuccessLoads += results.length;
 
       slideIdx = curIdx;
       var back = 1 - front;
@@ -529,6 +573,7 @@
   var lastIsPortrait = null;
 
   function wrapQueue() {
+    roundFailedPhotos = {};
     var lastSlide = slideQueue[slideIdx];
     var lastPhotos = lastSlide ? lastSlide.photos : [];
     if (SHUFFLE) {
