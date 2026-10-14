@@ -1,6 +1,6 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat: sync 31 newly added photos from Google Photos album (antigravity, 2026-10-13 19:17 EDT)
+- Last save (MBP M3): display: checkpoint photo sync changes (antigravity, 2026-10-14 11:36 EDT)
 - Completed:
   1. **Video slideshow integration**: Replaced video screenshots containing burned-in play buttons (`6f11c8d6e9.jpg`, `ec2c3c00bc.jpg`) with native H.264 video assets (`site/photos/74a4bbcfe2.mp4` for whale shark, `site/photos/ded31895ea.mp4` for cat).
   2. **Pipeline video support (`scripts/sync-photos.py`)**: Added `ffprobe` video metadata extraction (dimensions, rotation, duration, creation date) and `ffmpeg` frame extraction for color metrics and pHash. Fixed `load_overrides()` to parse `dates` from `photos/overrides.json`.

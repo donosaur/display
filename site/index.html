@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="f76b9aec49">
+<meta name="build" content="b53105da1f">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,6 +29,46 @@
     object-fit: cover;
     object-position: center;
     display: block;
+  }
+  .cell img.ken-burns {
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-origin: 50% 50%;
+    animation-duration: var(--kb-duration, 17.4s);
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+  }
+  .cell img.kb-zoom-in-tl { animation-name: kb-zoom-in-tl; }
+  .cell img.kb-zoom-in-br { animation-name: kb-zoom-in-br; }
+  .cell img.kb-zoom-in-tr { animation-name: kb-zoom-in-tr; }
+  .cell img.kb-zoom-out-center { animation-name: kb-zoom-out-center; }
+  .cell img.kb-zoom-out-bl { animation-name: kb-zoom-out-bl; }
+  .cell img.kb-pan-drift { animation-name: kb-pan-drift; }
+
+  @keyframes kb-zoom-in-tl {
+    0%   { transform: translate3d(0%, 0%, 0) scale(1.005); }
+    100% { transform: translate3d(1.8%, 1.2%, 0) scale(1.08); }
+  }
+  @keyframes kb-zoom-in-br {
+    0%   { transform: translate3d(0%, 0%, 0) scale(1.005); }
+    100% { transform: translate3d(-1.8%, -1.2%, 0) scale(1.08); }
+  }
+  @keyframes kb-zoom-in-tr {
+    0%   { transform: translate3d(-0.4%, 0.3%, 0) scale(1.015); }
+    100% { transform: translate3d(-2.0%, 1.3%, 0) scale(1.085); }
+  }
+  @keyframes kb-zoom-out-center {
+    0%   { transform: translate3d(-1.6%, -1.0%, 0) scale(1.085); }
+    100% { transform: translate3d(0%, 0%, 0) scale(1.01); }
+  }
+  @keyframes kb-zoom-out-bl {
+    0%   { transform: translate3d(1.6%, -1.1%, 0) scale(1.085); }
+    100% { transform: translate3d(-0.3%, 0.2%, 0) scale(1.015); }
+  }
+  @keyframes kb-pan-drift {
+    0%   { transform: translate3d(-1.5%, 0.5%, 0) scale(1.045); }
+    100% { transform: translate3d(1.5%, -0.5%, 0) scale(1.08); }
   }
   .pair-container {
     display: flex; width: 100%; height: 100%; background: #000;
@@ -168,6 +208,10 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
+    .cell img.ken-burns {
+      animation: none !important;
+      transform: none !important;
+    }
     .info-overlay, .info-overlay.visible {
       transition: opacity 0.05s ease !important;
       transform: none !important;
@@ -400,6 +444,7 @@
     var img = preloadedMedia || new Image();
     if (!img.src) img.src = photoSrc(photo);
     img.className = 'slide-img';
+    img.style.removeProperty('--kb-duration');
     return img;
   }
 
@@ -785,6 +830,33 @@
     return allSlides;
   }
 
+  var KB_CLASSES = [
+    'kb-zoom-in-tl',
+    'kb-zoom-in-br',
+    'kb-zoom-in-tr',
+    'kb-zoom-out-center',
+    'kb-zoom-out-bl',
+    'kb-pan-drift'
+  ];
+  var lastKbIdx = -1;
+
+  function pickKenBurnsClass(slide) {
+    if (slide && slide._kbClass) return slide._kbClass;
+    var idx;
+    if (SHUFFLE) {
+      idx = Math.floor(Math.random() * KB_CLASSES.length);
+      if (idx === lastKbIdx && KB_CLASSES.length > 1) {
+        idx = (idx + 1 + Math.floor(Math.random() * (KB_CLASSES.length - 1))) % KB_CLASSES.length;
+      }
+    } else {
+      idx = (lastKbIdx + 1) % KB_CLASSES.length;
+    }
+    lastKbIdx = idx;
+    var cls = KB_CLASSES[idx];
+    if (slide) slide._kbClass = cls;
+    return cls;
+  }
+
   function renderSlide(slideEl, slide, va, mediaList) {
     slideEl.innerHTML = '';
     if (!slide || !slide.photos.length) return;
@@ -792,6 +864,12 @@
       var cell = document.createElement('div');
       cell.className = 'cell';
       var media = createMediaElement(slide.photos[0], mediaList && mediaList[0]);
+      if (!isVideo(slide.photos[0])) {
+        var kbClass = pickKenBurnsClass(slide);
+        var kbDurationMs = getSlideDuration(slide) + 2400;
+        media.style.setProperty('--kb-duration', kbDurationMs + 'ms');
+        media.classList.add('ken-burns', kbClass);
+      }
       cell.appendChild(media);
       if (DEBUG) {
         var b = createDebugBadge(slide.photos[0], va);
