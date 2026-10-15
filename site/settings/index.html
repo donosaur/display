@@ -999,7 +999,7 @@
           el.style.display = 'none';
         });
         // Fallback to static /photos/overrides.json or local storage
-        return fetch('/photos/overrides.json')
+        return fetch('/photos/overrides.json', { cache: 'no-cache' })
           .then(function (res) { return res.ok ? res.json() : null; })
           .catch(function () { return null; })
           .then(function (fileData) {
@@ -1819,7 +1819,7 @@
   // Initialization
   loadOverrides()
     .then(function () {
-      return fetch('/photos/photos.json');
+      return fetch('/photos/photos.json', { cache: 'no-cache' });
     })
     .then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);

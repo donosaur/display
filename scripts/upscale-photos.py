@@ -92,27 +92,89 @@ def find_realesrgan_binary():
     return None
 
 
-def run_local_realesrgan(input_path, output_path, scale=4, model="realesr-general-x4v3", denoise=1):
-    """Run local Real-ESRGAN binary."""
+def run_local_realesrgan(input_path, output_path, scale=4, model="realesrgan-x4plus", target_max_edge=2400):
+    """Run local Real-ESRGAN binary with optical blending, natural grain, and EXIF preservation."""
+    import tempfile
+    import numpy as np
+    from PIL import ImageFilter, ImageOps
+
     binary = find_realesrgan_binary()
     if not binary:
         raise FileNotFoundError(
             "realesrgan-ncnn-vulkan binary not found. Download or install it to PATH or ./bin/"
         )
 
-    cmd = [
-        binary,
-        "-i", input_path,
-        "-o", output_path,
-        "-s", str(scale),
-        "-n", model,
-    ]
-    if "general" in model and denoise is not None:
-        cmd.extend(["-dn", str(denoise)])
+    with Image.open(input_path) as im:
+        orig_img = ImageOps.exif_transpose(im)
+        exif_bytes = orig_img.info.get("exif")
+        if orig_img.mode != "RGB":
+            orig_img = orig_img.convert("RGB")
+        orig_w, orig_h = orig_img.size
 
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if res.returncode != 0:
-        raise RuntimeError(f"Real-ESRGAN failed: {res.stderr}")
+    longest = max(orig_w, orig_h)
+    if longest <= 650:
+        target_longest = longest * 4
+    elif longest <= 1200:
+        target_longest = 2160
+    else:
+        target_longest = target_max_edge
+
+    scale_factor = target_longest / float(longest)
+    target_w = int(round(orig_w * scale_factor))
+    target_h = int(round(orig_h * scale_factor))
+
+    # Pre-scale input if needed so 4x Real-ESRGAN matches target ceiling
+    in_longest = min(longest, int(round(target_longest / 4.0)))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_in = os.path.join(tmpdir, "in.jpg")
+        tmp_out = os.path.join(tmpdir, "out.jpg")
+        if in_longest < longest:
+            in_scale = in_longest / float(longest)
+            in_w = max(1, int(round(orig_w * in_scale)))
+            in_h = max(1, int(round(orig_h * in_scale)))
+            orig_img.resize((in_w, in_h), Image.Resampling.LANCZOS).save(tmp_in, "JPEG", quality=98)
+        else:
+            orig_img.save(tmp_in, "JPEG", quality=98)
+
+        cmd = [
+            binary,
+            "-i", tmp_in,
+            "-o", tmp_out,
+            "-s", str(scale),
+            "-n", model,
+            "-t", "400",
+        ]
+        models_dir = os.path.join( os.path.dirname(binary), "models")
+        if os.path.isdir(models_dir):
+            cmd.extend(["-m", models_dir])
+
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0 or not os.path.isfile(tmp_out):
+            raise RuntimeError(f"Real-ESRGAN failed: {res.stderr}")
+
+        with Image.open(tmp_out) as sr_im:
+            sr_img = sr_im.convert("RGB")
+            if sr_img.size != (target_w, target_h):
+                sr_img = sr_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+        # Blend 88% neural reconstruction with 12% de-blocked optical reference + subtle film grain
+        base_smooth = orig_img.filter(ImageFilter.GaussianBlur(radius=0.6)).resize(
+            (target_w, target_h), Image.Resampling.BICUBIC
+        )
+        sr_arr = np.asarray(sr_img, dtype=np.float32)
+        base_arr = np.asarray(base_smooth, dtype=np.float32)
+        blended = 0.88 * sr_arr + 0.12 * base_arr
+
+        rng = np.random.default_rng(42)
+        grain = rng.normal(0.0, 1.3, size=(target_h, target_w, 1)).astype(np.float32)
+        final_arr = np.clip(blended + grain, 0, 255).astype(np.uint8)
+        final_img = Image.fromarray(final_arr, mode="RGB")
+
+        save_kwargs = {"quality": 95, "optimize": True}
+        if exif_bytes:
+            save_kwargs["exif"] = exif_bytes
+        final_img.save(output_path, "JPEG", **save_kwargs)
+
 
 
 def run_replicate_upscale(input_path, output_path, scale=4, face_enhance=True, token=None):

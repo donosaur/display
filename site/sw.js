@@ -1,7 +1,7 @@
 // Service Worker for display kiosk
 // Runtime caching: immutable hashed photos and videos (cache-first), shell and manifest (network-first)
 
-const SHELL_CACHE = 'display-shell-v4';
+const SHELL_CACHE = 'display-shell-v5';
 const PHOTO_CACHE = 'display-photos-v1';
 
 self.addEventListener('install', (event) => {
@@ -137,10 +137,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Strategy 2: /, /index.html, /photos/photos.json -> Network-first, falling back to cache
+  // Strategy 2: /, /index.html, /photos/photos.json -> Network-first (no-cache), falling back to cache
   if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '/photos/photos.json') {
     event.respondWith(
-      fetch(request).then((networkResponse) => {
+      fetch(request, { cache: 'no-cache' }).then((networkResponse) => {
         if (networkResponse && networkResponse.ok) {
           const clone = networkResponse.clone();
           caches.open(SHELL_CACHE).then((cache) => {

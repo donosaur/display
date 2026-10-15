@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="build" content="188db42161">
+<meta name="build" content="76f2ae8078">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1536,7 +1536,7 @@
   }
 
   function loadManifest() {
-    fetch('photos/photos.json')
+    fetch('photos/photos.json', { cache: 'no-cache' })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();

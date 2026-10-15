@@ -1,6 +1,6 @@
 # Display Kiosk — Handoff
 
-- Last save (MBP M3): feat(pairing): apply manual overrides and train preference model for pair scoring (antigravity, 2026-10-15 00:27 EDT)
+- Last save (MBP M3): feat: enhance all 296 photos with Real-ESRGAN neural super-resolution (antigravity, 2026-10-15 01:36 EDT)
 - Completed:
   1. **Video slideshow integration**: Replaced video screenshots containing burned-in play buttons (`6f11c8d6e9.jpg`, `ec2c3c00bc.jpg`) with native H.264 video assets (`site/photos/74a4bbcfe2.mp4` for whale shark, `site/photos/ded31895ea.mp4` for cat).
   2. **Pipeline video support (`scripts/sync-photos.py`)**: Added `ffprobe` video metadata extraction (dimensions, rotation, duration, creation date) and `ffmpeg` frame extraction for color metrics and pHash. Fixed `load_overrides()` to parse `dates` from `photos/overrides.json` and mirror `overrides.json` into `site/photos/overrides.json`.
