@@ -1,7 +1,7 @@
 // Service Worker for display kiosk
 // Runtime caching: immutable hashed photos and videos (cache-first), shell and manifest (network-first)
 
-const SHELL_CACHE = 'display-shell-v3';
+const SHELL_CACHE = 'display-shell-v4';
 const PHOTO_CACHE = 'display-photos-v1';
 
 self.addEventListener('install', (event) => {

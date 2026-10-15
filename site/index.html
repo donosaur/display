@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b53105da1f">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="build" content="5458dd7de9">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     height: 100%; background: #000; overflow: hidden;
     -webkit-user-select: none; user-select: none; cursor: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+    overscroll-behavior: none;
     font-family: -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
   }
   .slide {
@@ -35,7 +38,7 @@
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     transform-origin: 50% 50%;
-    animation-duration: var(--kb-duration, 17.4s);
+    animation-duration: var(--kb-duration, 62.4s);
     animation-timing-function: linear;
     animation-fill-mode: both;
   }
@@ -123,9 +126,76 @@
     font-size: 1.6vh; color: rgba(255,255,255,0.5); background: rgba(20,20,22,0.7);
     border: 1px solid #2a2a30; border-radius: 1vh;
     padding: 0.8vh 1.8vh; cursor: pointer;
+    touch-action: manipulation;
     display: flex; align-items: center; gap: 0.8vh; font-family: inherit;
   }
   #fsbtn.hide { display: none; }
+  #pausebtn {
+    position: fixed;
+    bottom: max(2.5vh, calc(env(safe-area-inset-bottom, 0px) + 18px));
+    right: max(2.5vw, calc(env(safe-area-inset-right, 0px) + 20px));
+    z-index: 26;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 10px 18px;
+    background: rgba(20, 20, 22, 0.78);
+    color: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    font-size: clamp(14px, 1.6vh, 18px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(4px) scale(0.99);
+    transition:
+      opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      visibility 0.9s;
+  }
+  #pausebtn.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    transition:
+      opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  @media (hover: hover) {
+    #pausebtn:hover {
+      background: rgba(32, 32, 36, 0.88);
+      border-color: rgba(255, 255, 255, 0.32);
+      color: #ffffff;
+    }
+  }
+  #pausebtn:active {
+    background: rgba(44, 44, 50, 0.92);
+    transform: scale(0.96);
+  }
+  #pausebtn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
+  }
+  .pause-btn-icon {
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    display: block;
+  }
   #tapstart {
     position: fixed; bottom: 1.5vh; right: 2vw; z-index: 10;
     font-size: 1.5vh; color: rgba(255, 255, 255, 0.65); background: rgba(20, 20, 22, 0.7);
@@ -212,7 +282,8 @@
       animation: none !important;
       transform: none !important;
     }
-    .info-overlay, .info-overlay.visible {
+    .info-overlay, .info-overlay.visible,
+    #pausebtn, #pausebtn.visible {
       transition: opacity 0.05s ease !important;
       transform: none !important;
     }
@@ -234,6 +305,16 @@
   </div>
 </div>
 <button id="fsbtn" type="button">&#x26F6; fullscreen</button>
+<button id="pausebtn" type="button" aria-label="Pause slideshow" aria-pressed="false" data-state="playing">
+  <svg id="pausebtn-icon-pause" class="pause-btn-icon" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"></rect>
+    <rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"></rect>
+  </svg>
+  <svg id="pausebtn-icon-play" class="pause-btn-icon" viewBox="0 0 16 16" aria-hidden="true" style="display:none">
+    <path d="M4.5 2.75a.75.75 0 0 1 1.14-.64l8 5.25a.75.75 0 0 1 0 1.28l-8 5.25A.75.75 0 0 1 4.5 13.25V2.75Z" fill="currentColor"></path>
+  </svg>
+  <span id="pausebtn-label">pause</span>
+</button>
 <div id="tapstart">tap to keep awake</div>
 <div id="status-note">couldn't load photos, retrying</div>
 
@@ -248,8 +329,8 @@
   /* ================= CONFIG & URL PARAMS ================= */
   var urlParams = new URLSearchParams(window.location.search);
 
-  // interval: seconds, default 15
-  var SLIDE_MS = 15000;
+  // interval: seconds, default 60
+  var SLIDE_MS = 60000;
   var intervalParam = parseFloat(urlParams.get('interval'));
   if (!isNaN(intervalParam) && intervalParam > 0) {
     SLIDE_MS = Math.round(intervalParam * 1000);
@@ -1081,16 +1162,22 @@
         }
       }, 2000);
 
-      // Preload next slide images in the background
+      // Preload adjacent slides in the background for fast forward/backward swipe
       var nextSlide = slideQueue[(slideIdx + 1) % slideQueue.length];
       preloadSlide(nextSlide);
+      if (slideQueue.length > 1) {
+        var prevSlide = slideQueue[(slideIdx - 1 + slideQueue.length) % slideQueue.length];
+        preloadSlide(prevSlide);
+      }
 
-      // Restart auto-advance timer for this slide
+      // Restart auto-advance timer for this slide (if not paused)
       scheduleNext();
     });
   }
 
   var slideTimer = null;
+  var paused = false;
+
   function getSlideDuration(slide) {
     var base = SLIDE_MS;
     if (slide && (slide.type === 'pair' || slide.type === 'triple')) {
@@ -1114,15 +1201,17 @@
 
   function scheduleNext() {
     if (slideTimer) { clearTimeout(slideTimer); slideTimer = null; }
+    if (paused) return;
     if (!slideQueue.length) return;
     var duration = getSlideDuration(slideQueue[slideIdx]);
     slideTimer = setTimeout(function () {
-      next();
+      if (!paused) next();
     }, duration);
   }
 
   // Watchdog: if no slide has changed in 3× the longest slide duration and document is visible, call next()
   setInterval(function () {
+    if (paused) return;
     if (document.visibilityState !== 'visible') return;
     var maxDuration = getLongestSlideDuration();
     if (Date.now() - lastSlideChangeTime > 3 * maxDuration) {
@@ -1179,6 +1268,13 @@
     } else {
       show(slideIdx + 1);
     }
+  }
+
+  function prev() {
+    if (slideTimer) { clearTimeout(slideTimer); slideTimer = null; }
+    if (!slideQueue.length) return;
+    var prevIdx = (slideIdx - 1 + slideQueue.length) % slideQueue.length;
+    show(prevIdx);
   }
 
   var pageStartTime = Date.now();
@@ -2708,9 +2804,54 @@
     renderInfoOverlayCanvas();
   }
 
+  var pauseBtnEl = document.getElementById('pausebtn');
+  var pauseIconEl = document.getElementById('pausebtn-icon-pause');
+  var playIconEl = document.getElementById('pausebtn-icon-play');
+  var pauseLabelEl = document.getElementById('pausebtn-label');
+
+  function updatePauseBtnUI() {
+    if (!pauseBtnEl) {
+      pauseBtnEl = document.getElementById('pausebtn');
+    }
+    if (!pauseBtnEl) return;
+    pauseBtnEl.setAttribute('aria-pressed', paused ? 'true' : 'false');
+    pauseBtnEl.setAttribute('aria-label', paused ? 'Play slideshow' : 'Pause slideshow');
+    pauseBtnEl.setAttribute('data-state', paused ? 'paused' : 'playing');
+    if (pauseIconEl) pauseIconEl.style.display = paused ? 'none' : 'block';
+    if (playIconEl) playIconEl.style.display = paused ? 'block' : 'none';
+    if (pauseLabelEl) pauseLabelEl.textContent = paused ? 'play' : 'pause';
+  }
+
+  function pauseSlideshow() {
+    paused = true;
+    if (slideTimer) {
+      clearTimeout(slideTimer);
+      slideTimer = null;
+    }
+    updatePauseBtnUI();
+  }
+
+  function resumeSlideshow() {
+    paused = false;
+    lastSlideChangeTime = Date.now();
+    updatePauseBtnUI();
+    scheduleNext();
+  }
+
+  function togglePause() {
+    if (paused) {
+      resumeSlideshow();
+    } else {
+      pauseSlideshow();
+    }
+  }
+
   function showInfoOverlay() {
     if (!infoOverlayEl) {
       infoOverlayEl = document.getElementById('info-overlay');
+    }
+    if (!pauseBtnEl) {
+      pauseBtnEl = document.getElementById('pausebtn');
     }
     if (!infoOverlayEl) return;
 
@@ -2718,12 +2859,16 @@
       renderWeatherUI(cachedWeather);
     }
     updateClock();
+    updatePauseBtnUI();
 
     if (!lastWeatherFetchTime || (Date.now() - lastWeatherFetchTime > 15 * 60 * 1000)) {
       fetchWeather(activeLat, activeLon);
     }
 
     infoOverlayEl.classList.add('visible');
+    if (pauseBtnEl) {
+      pauseBtnEl.classList.add('visible');
+    }
 
     if (infoTimer) {
       clearTimeout(infoTimer);
@@ -2741,8 +2886,14 @@
     if (!infoOverlayEl) {
       infoOverlayEl = document.getElementById('info-overlay');
     }
+    if (!pauseBtnEl) {
+      pauseBtnEl = document.getElementById('pausebtn');
+    }
     if (infoOverlayEl) {
       infoOverlayEl.classList.remove('visible');
+    }
+    if (pauseBtnEl) {
+      pauseBtnEl.classList.remove('visible');
     }
     if (infoTimer) {
       clearTimeout(infoTimer);
@@ -2758,9 +2909,12 @@
     }
   }
 
-  /* ---------- gesture handling (arms on first, shows info overlay) ---------- */
+  /* ---------- gesture handling (arms on first, shows info overlay + pause/play button, swipes navigate) ---------- */
   var tapEl = document.getElementById('tapstart');
-  function showTapStart() { tapEl.classList.add('show'); }
+  function showTapStart() {
+    if (armed) return;
+    tapEl.classList.add('show');
+  }
   function hideTapStart() { tapEl.classList.remove('show'); }
   function arm() {
     hideTapStart();
@@ -2772,55 +2926,152 @@
     armed = true;
   }
 
+  function isControlTarget(target) {
+    if (!target) return false;
+    if (target.id === 'fsbtn' || target.id === 'pausebtn') return true;
+    if (target.closest && (target.closest('#fsbtn') || target.closest('#pausebtn'))) return true;
+    return false;
+  }
+
+  if (pauseBtnEl) {
+    pauseBtnEl.addEventListener('pointerdown', function (e) {
+      e.stopPropagation();
+    });
+    pauseBtnEl.addEventListener('pointerup', function (e) {
+      e.stopPropagation();
+    });
+    pauseBtnEl.addEventListener('touchstart', function (e) {
+      e.stopPropagation();
+    }, { passive: true });
+    pauseBtnEl.addEventListener('touchend', function (e) {
+      e.stopPropagation();
+    }, { passive: true });
+    pauseBtnEl.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!armed) arm();
+      togglePause();
+      showInfoOverlay();
+    });
+  }
+
+  var SWIPE_MIN_X = 40;
+  var TAP_MAX_MOVE = 35;
+  var pointerActive = false;
   var pointerStartX = 0;
   var pointerStartY = 0;
-  var pointerStartTime = 0;
+  var pointerLastX = 0;
+  var pointerLastY = 0;
+  var touchActive = false;
+  var touchStartX = 0;
+  var touchStartY = 0;
+  var touchLastX = 0;
+  var touchLastY = 0;
+  var lastGestureTime = 0;
 
-  document.addEventListener('pointerdown', function (e) {
-    pointerStartX = e.clientX;
-    pointerStartY = e.clientY;
-    pointerStartTime = Date.now();
-  });
+  function handleDisplayGesture(deltaX, deltaY) {
+    var now = Date.now();
+    if (now - lastGestureTime < 80) return;
+    lastGestureTime = now;
 
-  document.addEventListener('pointerup', function (e) {
-    var isFsTarget = e.target && (e.target.id === 'fsbtn' || (e.target.closest && e.target.closest('#fsbtn')));
-    if (!isFsTarget && !isFullscreen()) {
+    if (!isFullscreen()) {
       showFsBtnTemp(10000);
     }
-    if (isFsTarget) return;
-
     if (!armed) {
       arm();
     }
 
-    var deltaX = e.clientX - pointerStartX;
-    var deltaY = e.clientY - pointerStartY;
-    var elapsed = Date.now() - pointerStartTime;
-
-    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 600) {
+    if (Math.abs(deltaX) >= SWIPE_MIN_X && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
       if (deltaX < 0) {
         next();
       } else {
-        if (slideQueue.length > 0) {
-          var prevIdx = (slideIdx - 1 + slideQueue.length) % slideQueue.length;
-          show(prevIdx);
-        }
+        prev();
       }
       return;
     }
 
-    showInfoOverlay();
+    if (Math.abs(deltaX) <= TAP_MAX_MOVE && Math.abs(deltaY) <= TAP_MAX_MOVE) {
+      showInfoOverlay();
+    }
+  }
+
+  document.addEventListener('pointerdown', function (e) {
+    if (isControlTarget(e.target)) {
+      pointerActive = false;
+      return;
+    }
+    pointerActive = true;
+    pointerStartX = e.clientX;
+    pointerStartY = e.clientY;
+    pointerLastX = e.clientX;
+    pointerLastY = e.clientY;
   });
 
+  document.addEventListener('pointermove', function (e) {
+    if (!pointerActive) return;
+    pointerLastX = e.clientX;
+    pointerLastY = e.clientY;
+  });
+
+  document.addEventListener('pointerup', function (e) {
+    if (isControlTarget(e.target)) {
+      pointerActive = false;
+      return;
+    }
+    var startX = pointerActive ? pointerStartX : e.clientX;
+    var startY = pointerActive ? pointerStartY : e.clientY;
+    pointerActive = false;
+    handleDisplayGesture(e.clientX - startX, e.clientY - startY);
+  });
+
+  document.addEventListener('pointercancel', function () {
+    if (!pointerActive) return;
+    var dx = pointerLastX - pointerStartX;
+    var dy = pointerLastY - pointerStartY;
+    pointerActive = false;
+    if (Math.abs(dx) >= SWIPE_MIN_X && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      handleDisplayGesture(dx, dy);
+    }
+  });
+
+  document.addEventListener('touchstart', function (e) {
+    if (isControlTarget(e.target) || !e.touches || e.touches.length !== 1) {
+      touchActive = false;
+      return;
+    }
+    touchActive = true;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchLastX = touchStartX;
+    touchLastY = touchStartY;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!touchActive || !e.touches || e.touches.length !== 1) return;
+    touchLastX = e.touches[0].clientX;
+    touchLastY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', function (e) {
+    if (isControlTarget(e.target) || !touchActive) {
+      touchActive = false;
+      return;
+    }
+    touchActive = false;
+    var endX = (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0].clientX : touchLastX;
+    var endY = (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0].clientY : touchLastY;
+    handleDisplayGesture(endX - touchStartX, endY - touchStartY);
+  }, { passive: true });
+
   document.addEventListener('keydown', function (e) {
+    if (isControlTarget(e.target)) return;
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
       next();
     } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-      if (slideQueue.length > 0) {
-        var prevIdx = (slideIdx - 1 + slideQueue.length) % slideQueue.length;
-        show(prevIdx);
-      }
+      prev();
     } else if (e.key === 'i' || e.key === 't' || e.key === 'w') {
+      showInfoOverlay();
+    } else if (e.key === 'p' || e.key === 'k') {
+      togglePause();
       showInfoOverlay();
     }
   });
@@ -2856,7 +3107,9 @@
       getPhotos: function() { return photos; },
       getQueue: function() { return slideQueue; },
       getSlideIdx: function() { return slideIdx; },
+      getSlideMs: function() { return SLIDE_MS; },
       isArmed: function() { return armed; },
+      isPaused: function() { return paused; },
       getFront: function() { return front; },
       getSlides: function() { return slides; },
       getSlideTimer: function() { return slideTimer; },
@@ -2867,6 +3120,10 @@
       renderSlide: renderSlide,
       show: show,
       next: next,
+      prev: prev,
+      pause: pauseSlideshow,
+      play: resumeSlideshow,
+      togglePause: togglePause,
       wrapQueue: wrapQueue,
       handleResize: handleResize,
       loadImage: loadImage,
@@ -2877,7 +3134,11 @@
       isInfoOverlayVisible: function () {
         return infoOverlayEl ? infoOverlayEl.classList.contains('visible') : false;
       },
+      isPauseBtnVisible: function () {
+        return pauseBtnEl ? pauseBtnEl.classList.contains('visible') : false;
+      },
       getInfoOverlayEl: function () { return infoOverlayEl; },
+      getPauseBtnEl: function () { return pauseBtnEl; },
       getInfoPalette: function () { return currentPalette; },
       getCachedWeather: function () { return cachedWeather; },
       fetchWeather: fetchWeather,
