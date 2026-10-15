@@ -2,17 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Review Pairings — Display Kiosk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Settings — Display Kiosk</title>
 <style>
   :root {
     --bg: #f7f6f3;
     --surface: #ffffff;
+    --surface-subtle: #fafaf9;
     --border: #e7e5e4;
     --border-subtle: #f5f5f4;
     --text: #1c1917;
-    --text-muted: #78716c;
-    --text-faint: #a8a29e;
+    --text-muted: #57534e;
+    --text-faint: #78716c;
     --accent: #c2410c;
     --accent-bg: #fff7ed;
     --accent-border: #fdba74;
@@ -25,6 +26,7 @@
     --score-high-bg: #fef3c7;
     --score-high-text: #92400e;
     --score-high-border: #fde68a;
+    --radius: 4px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,7 +37,16 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     line-height: 1.45;
     padding: 0;
-    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  button, select, input, a {
+    touch-action: manipulation;
+  }
+
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   /* Top sticky control bar */
@@ -43,11 +54,11 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(247, 246, 243, 0.94);
+    background: rgba(247, 246, 243, 0.96);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
-    padding: 14px 24px;
+    padding: 12px 24px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -57,24 +68,77 @@
 
   .brand-group {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
   }
 
-  h1 {
-    font-size: 16px;
+  /* Top-level View Switcher Tabs */
+  .main-tabs {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #efede8;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .main-tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  @media (hover: hover) {
+    .main-tab-btn:hover {
+      color: var(--text);
+    }
+  }
+
+  .main-tab-btn:active {
+    background: var(--surface-subtle);
+  }
+
+  .main-tab-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
     font-weight: 600;
-    letter-spacing: -0.01em;
+  }
+
+  .main-tab-count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: #e5e2dc;
+    color: var(--text);
+  }
+
+  .main-tab-btn.active .main-tab-count {
+    background: var(--text);
+    color: var(--surface);
   }
 
   .stats {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-muted);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   .nav-group {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     font-size: 12px;
@@ -83,16 +147,18 @@
   .nav-link {
     color: var(--text-muted);
     text-decoration: none;
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 6px 10px;
+    border-radius: var(--radius);
     border: 1px solid transparent;
-    transition: all 0.15s ease;
+    transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
   }
 
-  .nav-link:hover {
-    color: var(--text);
-    background: var(--surface);
-    border-color: var(--border);
+  @media (hover: hover) {
+    .nav-link:hover {
+      color: var(--text);
+      background: var(--surface);
+      border-color: var(--border);
+    }
   }
 
   /* Filter toolbar below header */
@@ -116,37 +182,39 @@
 
   .filter-tabs {
     display: flex;
+    flex-wrap: wrap;
     border: 1px solid var(--border);
-    border-radius: 5px;
-    background: #fafaf9;
+    border-radius: var(--radius);
+    background: var(--surface-subtle);
     padding: 2px;
     gap: 2px;
   }
 
   .tab-btn {
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
     color: var(--text-muted);
     padding: 5px 10px;
-    border-radius: 4px;
+    border-radius: 3px;
     font-size: 12px;
     font-family: inherit;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: 5px;
   }
 
-  .tab-btn:hover {
-    color: var(--text);
+  @media (hover: hover) {
+    .tab-btn:hover {
+      color: var(--text);
+    }
   }
 
   .tab-btn.active {
     background: var(--surface);
     color: var(--text);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    border-color: var(--border);
     font-weight: 600;
   }
 
@@ -154,17 +222,18 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
     padding: 1px 5px;
-    border-radius: 10px;
+    border-radius: 3px;
     background: #e7e5e4;
     color: #44403c;
   }
 
   .tab-btn.active .tab-count {
-    background: #1c1917;
-    color: #ffffff;
+    background: var(--text);
+    color: var(--surface);
   }
 
-  .tab-btn[data-status="confirmed"].active .tab-count {
+  .tab-btn[data-status="confirmed"].active .tab-count,
+  .tab-btn[data-enh-filter="enhanced"].active .tab-count {
     background: var(--confirmed-text);
   }
 
@@ -172,19 +241,21 @@
     background: var(--denied-text);
   }
 
-  select, input[type="search"] {
+  .tab-btn[data-enh-filter="original"].active .tab-count {
+    background: var(--accent);
+  }
+
+  select, input[type="search"], input[type="text"] {
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius);
     padding: 5px 10px;
     font-size: 12px;
     font-family: inherit;
-    outline: none;
-    transition: border-color 0.15s ease;
   }
 
-  select:focus, input[type="search"]:focus {
+  select:focus, input[type="search"]:focus, input[type="text"]:focus {
     border-color: var(--text);
   }
 
@@ -192,7 +263,7 @@
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius);
     padding: 5px 10px;
     font-size: 12px;
     font-family: inherit;
@@ -202,11 +273,22 @@
     align-items: center;
     gap: 6px;
     user-select: none;
-    transition: all 0.15s ease;
   }
 
-  .btn:hover {
-    border-color: var(--text-muted);
+  @media (hover: hover) {
+    .btn:hover {
+      border-color: var(--text-muted);
+    }
+  }
+
+  .btn:active {
+    background: var(--surface-subtle);
+  }
+
+  .btn.active-toggle {
+    background: var(--text);
+    color: var(--surface);
+    border-color: var(--text);
   }
 
   .btn.primary {
@@ -215,8 +297,10 @@
     border-color: var(--accent);
   }
 
-  .btn.primary:hover {
-    opacity: 0.92;
+  @media (hover: hover) {
+    .btn.primary:hover {
+      opacity: 0.92;
+    }
   }
 
   .btn.sync-btn {
@@ -228,8 +312,8 @@
   .status-pill {
     font-size: 11px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    padding: 3px 8px;
-    border-radius: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius);
     background: #f5f5f4;
     color: var(--text-muted);
     border: 1px solid var(--border);
@@ -241,7 +325,15 @@
     border-color: var(--confirmed-border);
   }
 
-  /* Main Container */
+  /* View Containers */
+  .view-section {
+    display: none;
+  }
+
+  .view-section.active {
+    display: block;
+  }
+
   main {
     padding: 24px;
     max-width: 1440px;
@@ -250,9 +342,9 @@
 
   /* Quick Keyboard Help Banner */
   .shortcuts-banner {
-    background: #fafaf9;
+    background: var(--surface-subtle);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     padding: 8px 14px;
     margin-bottom: 20px;
     font-size: 12px;
@@ -275,11 +367,10 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 3px;
-    padding: 2px 6px;
+    padding: 1px 6px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
     color: var(--text);
-    box-shadow: 0 1px 0 rgba(0,0,0,0.08);
   }
 
   /* Pairs Grid */
@@ -288,38 +379,41 @@
     gap: 24px;
   }
 
-  /* View mode: Stacked (Kiosk portrait emulation) */
   .pairs-grid.view-stacked {
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   }
 
-  /* View mode: Side by side */
   .pairs-grid.view-side {
     grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
   }
 
-  /* View mode: Compact list */
   .pairs-grid.view-compact {
     grid-template-columns: 1fr;
     gap: 10px;
   }
 
-  /* Pairing Card */
-  .pair-card {
+  /* Pairing Card & Enhancement Card Shared Surface */
+  .pair-card, .enh-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transition: all 0.15s ease;
   }
 
-  .pair-card:hover {
-    border-color: #d6d3d1;
+  .pair-card.deferred-card, .enh-card.deferred-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 540px;
   }
 
-  .pair-card.active-focused {
+  @media (hover: hover) {
+    .pair-card:hover, .enh-card:hover {
+      border-color: #d6d3d1;
+    }
+  }
+
+  .pair-card.active-focused, .enh-card.active-focused {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -332,11 +426,12 @@
   .pair-card.is-denied {
     border-color: var(--denied-border);
     background: #fffcfc;
-    opacity: 0.75;
+    opacity: 0.78;
   }
 
-  .pair-card.is-denied:hover {
-    opacity: 1;
+  .enh-card.is-original {
+    border-color: var(--accent-border);
+    background: #fffaf5;
   }
 
   .card-header {
@@ -345,7 +440,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #fafaf9;
+    background: var(--surface-subtle);
     font-size: 12px;
     gap: 10px;
   }
@@ -373,9 +468,11 @@
     text-decoration: none;
   }
 
-  .pair-names a:hover {
-    text-decoration: underline;
-    color: var(--accent);
+  @media (hover: hover) {
+    .pair-names a:hover {
+      text-decoration: underline;
+      color: var(--accent);
+    }
   }
 
   .pair-plus {
@@ -385,7 +482,7 @@
   .header-badges {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
   }
 
@@ -413,7 +510,7 @@
   }
 
   .state-badge {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     padding: 2px 7px;
     border-radius: 3px;
@@ -439,8 +536,14 @@
     border: 1px solid var(--denied-border);
   }
 
+  .state-badge.original-active {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid var(--accent-border);
+  }
+
   .source-badge {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     padding: 2px 7px;
     border-radius: 3px;
@@ -458,6 +561,12 @@
     background: #eff6ff;
     color: #1d4ed8;
     border: 1px solid #bfdbfe;
+  }
+
+  .source-badge.manual {
+    background: #f5f5f4;
+    color: var(--text);
+    border: 1px solid var(--border);
   }
 
   /* Photos Stage: Stacked Mode (Echo Show 15 1080x1920 portrait split) */
@@ -494,13 +603,13 @@
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     padding: 10px;
-    background: #fafaf9;
+    background: var(--surface-subtle);
     aspect-ratio: 16 / 9;
   }
 
   .view-side .photo-frame {
     position: relative;
-    border-radius: 4px;
+    border-radius: 3px;
     overflow: hidden;
     background: #e7e5e4;
   }
@@ -588,7 +697,7 @@
 
   /* Card Meta & Breakdown */
   .card-meta {
-    padding: 12px 14px;
+    padding: 10px 14px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -616,15 +725,21 @@
   }
 
   .reason-pill.positive {
-    background: #f0fdf4;
-    color: #166534;
-    border-color: #bbf7d0;
+    background: var(--confirmed-bg);
+    color: var(--confirmed-text);
+    border-color: var(--confirmed-border);
   }
 
   .reason-pill.penalty {
-    background: #fef2f2;
-    color: #991b1b;
-    border-color: #fecaca;
+    background: var(--denied-bg);
+    color: var(--denied-text);
+    border-color: var(--denied-border);
+  }
+
+  .reason-pill.amber {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-color: var(--accent-border);
   }
 
   .palettes-compare {
@@ -650,8 +765,9 @@
   .card-actions {
     padding: 8px 14px;
     border-bottom: 1px solid var(--border-subtle);
-    background: #fafaf9;
+    background: var(--surface-subtle);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
@@ -659,29 +775,38 @@
 
   .action-buttons {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
   }
 
   .action-btn {
-    padding: 5px 12px;
+    padding: 5px 11px;
     font-size: 12px;
     font-weight: 500;
-    border-radius: 4px;
+    font-family: inherit;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
     background: var(--surface);
+    color: var(--text);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    transition: all 0.15s ease;
   }
 
   .action-btn.confirm-btn {
-    color: #166534;
+    color: var(--confirmed-text);
   }
 
-  .action-btn.confirm-btn:hover, .action-btn.confirm-btn.active {
+  @media (hover: hover) {
+    .action-btn.confirm-btn:hover {
+      background: var(--confirmed-bg);
+      border-color: var(--confirmed-border);
+    }
+  }
+
+  .action-btn.confirm-btn.active {
     background: var(--confirmed-bg);
     border-color: var(--confirmed-border);
     color: var(--confirmed-text);
@@ -689,13 +814,39 @@
   }
 
   .action-btn.deny-btn {
-    color: #991b1b;
+    color: var(--denied-text);
   }
 
-  .action-btn.deny-btn:hover, .action-btn.deny-btn.active {
+  @media (hover: hover) {
+    .action-btn.deny-btn:hover {
+      background: var(--denied-bg);
+      border-color: var(--denied-border);
+    }
+  }
+
+  .action-btn.deny-btn.active {
     background: var(--denied-bg);
     border-color: var(--denied-border);
     color: var(--denied-text);
+    font-weight: 600;
+  }
+
+  .action-btn.orig-btn {
+    color: var(--text-muted);
+  }
+
+  @media (hover: hover) {
+    .action-btn.orig-btn:hover {
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+      color: var(--accent);
+    }
+  }
+
+  .action-btn.orig-btn.active {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+    color: var(--accent);
     font-weight: 600;
   }
 
@@ -703,9 +854,195 @@
     color: var(--text-muted);
   }
 
-  .action-btn.reset-btn:hover {
+  @media (hover: hover) {
+    .action-btn.reset-btn:hover {
+      color: var(--text);
+      border-color: var(--text-muted);
+    }
+  }
+
+  /* ==================== ENHANCED PHOTOS TAB ==================== */
+  .enh-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(580px, 1fr));
+    gap: 24px;
+  }
+
+  /* Side-by-side comparison stage */
+  .enh-stage-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px;
+    background: #141413;
+  }
+
+  .enh-pane {
+    position: relative;
+    background: #1c1917;
+    border-radius: 3px;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-in;
+  }
+
+  .enh-card.zoomed .enh-pane {
+    cursor: zoom-out;
+  }
+
+  .enh-pane img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transition: transform 0.15s ease;
+    transform-origin: var(--zoom-x, 50%) var(--zoom-y, 50%);
+  }
+
+  .enh-card.zoomed .enh-pane img {
+    transform: scale(2.25);
+  }
+
+  .enh-pane-tag {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(28, 25, 23, 0.82);
+    color: #f5f5f4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 3px;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .enh-pane-tag.is-active-source {
+    background: rgba(22, 101, 52, 0.9);
+    border-color: rgba(187, 247, 208, 0.4);
+    color: #ffffff;
+  }
+
+  .enh-pane-tag.is-active-orig {
+    background: rgba(194, 65, 12, 0.92);
+    border-color: rgba(253, 186, 116, 0.45);
+    color: #ffffff;
+  }
+
+  /* Interactive Split Wipe Slider Stage */
+  .enh-stage-slider {
+    position: relative;
+    background: #141413;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .enh-slider-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .enh-slider-layer img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform-origin: var(--zoom-x, 50%) var(--zoom-y, 50%);
+    transition: transform 0.15s ease;
+  }
+
+  .enh-card.zoomed .enh-slider-layer img {
+    transform: scale(2.25);
+  }
+
+  .enh-slider-before {
+    clip-path: inset(0 calc(100% - var(--split-pct, 50%)) 0 0);
+    z-index: 2;
+  }
+
+  .enh-slider-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split-pct, 50%);
+    width: 2px;
+    background: #ffffff;
+    z-index: 3;
+    pointer-events: none;
+    transform: translateX(-1px);
+  }
+
+  .enh-slider-handle {
+    position: absolute;
+    top: 50%;
+    left: var(--split-pct, 50%);
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface);
     color: var(--text);
-    border-color: var(--text-muted);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .enh-slider-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: ew-resize;
+    z-index: 5;
+    margin: 0;
+  }
+
+  /* Flip in Place Stage */
+  .enh-stage-flip {
+    position: relative;
+    background: #141413;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .enh-stage-flip img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform-origin: var(--zoom-x, 50%) var(--zoom-y, 50%);
+    transition: transform 0.15s ease;
+  }
+
+  .enh-card.zoomed .enh-stage-flip img {
+    transform: scale(2.25);
+  }
+
+  .enh-flip-hint {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(28, 25, 23, 0.82);
+    color: #e7e5e4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 3px;
+    pointer-events: none;
   }
 
   /* Empty state */
@@ -726,7 +1063,7 @@
     align-items: center;
     justify-content: center;
     z-index: 200;
-    backdrop-filter: blur(4px);
+    padding: 16px;
   }
 
   .modal-overlay.open {
@@ -736,11 +1073,10 @@
   .modal-box {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
     width: 100%;
     max-width: 520px;
     padding: 20px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   }
 
   .modal-box h2 {
@@ -772,17 +1108,16 @@
   /* Toast notification */
   .toast {
     position: fixed;
-    bottom: 24px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     right: 24px;
     background: #1c1917;
     color: #fafafa;
     padding: 10px 16px;
-    border-radius: 6px;
+    border-radius: var(--radius);
     font-size: 13px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     opacity: 0;
     transform: translateY(10px);
-    transition: all 0.2s ease;
+    transition: opacity 0.2s ease, transform 0.2s ease;
     pointer-events: none;
     z-index: 300;
   }
@@ -791,95 +1126,193 @@
     opacity: 1;
     transform: translateY(0);
   }
+
+  /* Mobile ergonomics per prototype.md */
+  @media (max-width: 768px) {
+    header.bar, .toolbar, main {
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+
+    .main-tab-btn, .tab-btn, .btn, .action-btn, .nav-link {
+      min-height: 44px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    select, input[type="search"], input[type="text"] {
+      min-height: 44px;
+      font-size: 16px;
+    }
+
+    .enh-grid,
+    .pairs-grid.view-stacked,
+    .pairs-grid.view-side {
+      grid-template-columns: 1fr;
+    }
+
+    .enh-stage-side {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 </style>
 </head>
 <body>
 
 <header class="bar">
   <div class="brand-group">
-    <h1>Review Pairings</h1>
+    <div class="main-tabs" role="tablist" aria-label="Settings sections">
+      <button id="main-tab-pairings" class="main-tab-btn active" role="tab" aria-selected="true" data-main-tab="pairings" type="button">
+        Review Pairings <span class="main-tab-count" id="main-count-pairings">0</span>
+      </button>
+      <button id="main-tab-enhancements" class="main-tab-btn" role="tab" aria-selected="false" data-main-tab="enhancements" type="button">
+        Enhanced Photos <span class="main-tab-count" id="main-count-enhancements">0</span>
+      </button>
+    </div>
     <div id="stats" class="stats">Loading...</div>
   </div>
 
   <nav class="nav-group">
-    <a href="/" class="nav-link">&larr; Slideshow</a>
-    <a href="/review.html" class="nav-link local-only-link">Photo Review</a>
-    <a href="/compare.html" class="nav-link local-only-link">Compare Upscales</a>
-  </nav>
-</header>
-
-<div class="toolbar">
-  <div class="toolbar-left">
-    <!-- Status Filter Tabs -->
-    <div class="filter-tabs">
-      <button class="tab-btn active" data-status="all" type="button">
-        All <span class="tab-count" id="count-all">0</span>
-      </button>
-      <button class="tab-btn" data-status="unreviewed" type="button">
-        Unreviewed <span class="tab-count" id="count-unreviewed">0</span>
-      </button>
-      <button class="tab-btn" data-status="confirmed" type="button">
-        Confirmed <span class="tab-count" id="count-confirmed">0</span>
-      </button>
-      <button class="tab-btn" data-status="denied" type="button">
-        Denied <span class="tab-count" id="count-denied">0</span>
-      </button>
-    </div>
-
-    <!-- Search Input -->
-    <input type="search" id="search-input" placeholder="Filter by photo, tag, or date...">
-
-    <!-- Score Filter -->
-    <select id="score-filter">
-      <option value="0.0">All Scores (≥0.20)</option>
-      <option value="0.35">Score ≥ 0.35</option>
-      <option value="0.45">Score ≥ 0.45</option>
-      <option value="0.50">Score ≥ 0.50 (High)</option>
-    </select>
-
-    <!-- Sort Dropdown -->
-    <select id="sort-select">
-      <option value="score-desc">Highest Score First</option>
-      <option value="score-asc">Lowest Score First</option>
-      <option value="status-first">Reviewed First</option>
-      <option value="date-desc">Newest Date First</option>
-    </select>
-  </div>
-
-  <div class="toolbar-right">
-    <!-- View Mode Toggle -->
-    <select id="view-mode">
-      <option value="stacked">Kiosk Split (Portrait 1080×1920)</option>
-      <option value="side">Side by Side</option>
-      <option value="compact">Compact Grid</option>
-    </select>
-
-    <button id="add-pair-btn" class="btn" type="button">+ Pair Photos</button>
     <button id="save-btn" class="btn primary" type="button">Save Overrides</button>
     <button id="sync-btn" class="btn sync-btn" type="button" title="Recompute scores and update photos.json">Sync Kiosk</button>
     <div id="save-status" class="status-pill">Ready</div>
-  </div>
-</div>
+    <a href="/" class="nav-link">&larr; Slideshow</a>
+  </nav>
+</header>
 
-<main>
-  <!-- Keyboard Shortcut Helper -->
-  <div class="shortcuts-banner">
-    <div class="shortcut-keys">
-      <span><strong>Keyboard Review:</strong></span>
-      <span><kbd>C</kbd> or <kbd>Y</kbd> Confirm</span>
-      <span><kbd>D</kbd> or <kbd>N</kbd> Deny</span>
-      <span><kbd>R</kbd> Reset</span>
-      <span><kbd>J</kbd> / <kbd>↓</kbd> Next</span>
-      <span><kbd>K</kbd> / <kbd>↑</kbd> Prev</span>
+<!-- ==================== VIEW 1: REVIEW PAIRINGS ==================== -->
+<section id="pairings-view" class="view-section active" aria-labelledby="main-tab-pairings">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="filter-tabs">
+        <button class="tab-btn active" data-status="all" type="button">
+          All <span class="tab-count" id="count-all">0</span>
+        </button>
+        <button class="tab-btn" data-status="unreviewed" type="button">
+          Unreviewed <span class="tab-count" id="count-unreviewed">0</span>
+        </button>
+        <button class="tab-btn" data-status="confirmed" type="button">
+          Confirmed <span class="tab-count" id="count-confirmed">0</span>
+        </button>
+        <button class="tab-btn" data-status="denied" type="button">
+          Denied <span class="tab-count" id="count-denied">0</span>
+        </button>
+      </div>
+
+      <input type="search" id="search-input" placeholder="Filter by photo, tag, or date...">
+
+      <select id="score-filter" aria-label="Minimum pair score">
+        <option value="0.0">All Scores (&ge;0.20)</option>
+        <option value="0.35">Score &ge; 0.35</option>
+        <option value="0.45">Score &ge; 0.45</option>
+        <option value="0.50">Score &ge; 0.50 (High)</option>
+      </select>
+
+      <select id="sort-select" aria-label="Sort pairings">
+        <option value="score-desc">Highest Score First</option>
+        <option value="score-asc">Lowest Score First</option>
+        <option value="status-first">Reviewed First</option>
+        <option value="date-desc">Newest Date First</option>
+      </select>
     </div>
-    <div style="font-size: 11px;">
-      Manual decisions take absolute precedence over algorithm scores.
+
+    <div class="toolbar-right">
+      <select id="view-mode" aria-label="Pairing layout view">
+        <option value="stacked">Kiosk Split (Portrait 1080&times;1920)</option>
+        <option value="side">Side by Side</option>
+        <option value="compact">Compact Grid</option>
+      </select>
+
+      <button id="add-pair-btn" class="btn" type="button">+ Pair Photos</button>
     </div>
   </div>
 
-  <!-- Main Pairs Grid -->
-  <div id="pairs-grid" class="pairs-grid view-stacked"></div>
-</main>
+  <main>
+    <div class="shortcuts-banner">
+      <div class="shortcut-keys">
+        <span><strong>Keyboard Review:</strong></span>
+        <span><kbd>C</kbd> or <kbd>Y</kbd> Confirm</span>
+        <span><kbd>D</kbd> or <kbd>N</kbd> Deny</span>
+        <span><kbd>R</kbd> Reset</span>
+        <span><kbd>J</kbd> / <kbd>&darr;</kbd> Next</span>
+        <span><kbd>K</kbd> / <kbd>&uarr;</kbd> Prev</span>
+      </div>
+      <div style="font-size: 11px;">
+        Manual decisions take absolute precedence over algorithm scores.
+      </div>
+    </div>
+
+    <div id="pairs-grid" class="pairs-grid view-stacked"></div>
+  </main>
+</section>
+
+<!-- ==================== VIEW 2: ENHANCED PHOTOS ==================== -->
+<section id="enhancements-view" class="view-section" aria-labelledby="main-tab-enhancements">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="filter-tabs">
+        <button class="tab-btn enh-filter-btn active" data-enh-filter="all" type="button">
+          All Enhanced <span class="tab-count" id="enh-count-all">0</span>
+        </button>
+        <button class="tab-btn enh-filter-btn" data-enh-filter="enhanced" type="button">
+          Using Enhanced <span class="tab-count" id="enh-count-enhanced">0</span>
+        </button>
+        <button class="tab-btn enh-filter-btn" data-enh-filter="original" type="button">
+          Reverted to Original <span class="tab-count" id="enh-count-original">0</span>
+        </button>
+        <button class="tab-btn enh-filter-btn" data-enh-filter="sub1080" type="button">
+          Originally &lt;1080p <span class="tab-count" id="enh-count-sub1080">0</span>
+        </button>
+      </div>
+
+      <input type="search" id="enh-search-input" placeholder="Filter by filename, caption, or date...">
+
+      <select id="enh-sort-select" aria-label="Sort enhanced photos">
+        <option value="orig-res-asc">Smallest Original First</option>
+        <option value="scale-desc">Largest Upscale Factor First</option>
+        <option value="reverted-first">Reverted to Original First</option>
+        <option value="date-desc">Newest Date First</option>
+        <option value="fn-asc">Filename (A&ndash;Z)</option>
+      </select>
+    </div>
+
+    <div class="toolbar-right">
+      <select id="enh-compare-mode" aria-label="Comparison display mode">
+        <option value="side">Side by Side (Original vs Enhanced)</option>
+        <option value="slider">Split Wipe Slider (Drag to Compare)</option>
+        <option value="flip">Flip in Place (Click / Space to Toggle)</option>
+      </select>
+
+      <button id="enh-zoom-btn" class="btn" type="button" title="Toggle 2.25x detail zoom across cards (Key: Z)">2&times; Detail Loupe</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="shortcuts-banner">
+      <div class="shortcut-keys">
+        <span><strong>Keyboard Review:</strong></span>
+        <span><kbd>O</kbd> Switch to Original</span>
+        <span><kbd>E</kbd> Use Enhanced</span>
+        <span><kbd>Space</kbd> Flip Original / Enhanced</span>
+        <span><kbd>Z</kbd> 2&times; Loupe Zoom</span>
+        <span><kbd>J</kbd> / <kbd>&darr;</kbd> Next</span>
+        <span><kbd>K</kbd> / <kbd>&uarr;</kbd> Prev</span>
+      </div>
+      <div style="font-size: 11px;">
+        Switching a photo to Original serves its untouched source file on the kiosk.
+      </div>
+    </div>
+
+    <div id="enh-grid" class="enh-grid"></div>
+  </main>
+</section>
 
 <!-- Add Custom Pair Modal -->
 <div id="add-pair-modal" class="modal-overlay">
@@ -911,19 +1344,37 @@
 
   var allPhotos = [];
   var photoMap = {};
-  var allPairs = []; // Array of pair objects: { key, p1, p2, score, state: 'suggested'|'confirmed'|'denied', reasons: [] }
-  var overrides = { always_pair: [], never_pair: [], tags: {} };
+  var enhancedPhotos = [];
+  var allPairs = [];
+  var overrides = { always_pair: [], never_pair: [], tags: {}, use_original: [] };
   var focusedPairIndex = 0;
+  var focusedEnhIndex = 0;
   var isServerSynced = false;
+  var activeMainTab = 'pairings';
+  var globalEnhZoom = false;
 
   // DOM Elements
   var statsEl = document.getElementById('stats');
+  var mainTabButtons = document.querySelectorAll('.main-tab-btn');
+  var mainCountPairingsEl = document.getElementById('main-count-pairings');
+  var mainCountEnhancementsEl = document.getElementById('main-count-enhancements');
+  var pairingsViewEl = document.getElementById('pairings-view');
+  var enhancementsViewEl = document.getElementById('enhancements-view');
+
   var pairsGridEl = document.getElementById('pairs-grid');
   var searchInput = document.getElementById('search-input');
   var scoreFilterEl = document.getElementById('score-filter');
   var sortSelect = document.getElementById('sort-select');
   var viewModeSelect = document.getElementById('view-mode');
-  var tabButtons = document.querySelectorAll('.tab-btn');
+  var pairTabButtons = document.querySelectorAll('#pairings-view .tab-btn');
+
+  var enhGridEl = document.getElementById('enh-grid');
+  var enhSearchInput = document.getElementById('enh-search-input');
+  var enhSortSelect = document.getElementById('enh-sort-select');
+  var enhCompareModeSelect = document.getElementById('enh-compare-mode');
+  var enhZoomBtn = document.getElementById('enh-zoom-btn');
+  var enhFilterButtons = document.querySelectorAll('.enh-filter-btn');
+
   var saveBtn = document.getElementById('save-btn');
   var syncBtn = document.getElementById('sync-btn');
   var saveStatusEl = document.getElementById('save-status');
@@ -934,21 +1385,67 @@
   var countConfirmedEl = document.getElementById('count-confirmed');
   var countDeniedEl = document.getElementById('count-denied');
 
-  var currentStatusFilter = 'all';
+  var enhCountAllEl = document.getElementById('enh-count-all');
+  var enhCountEnhancedEl = document.getElementById('enh-count-enhanced');
+  var enhCountOriginalEl = document.getElementById('enh-count-original');
+  var enhCountSub1080El = document.getElementById('enh-count-sub1080');
 
-  // Read URL params
+  var currentStatusFilter = 'all';
+  var currentEnhFilter = 'all';
+
+  // Read URL params & hash
   var urlParams = new URLSearchParams(window.location.search);
+  var initialTab = urlParams.get('tab') || (window.location.hash === '#enhancements' ? 'enhancements' : '');
   var initialPhotoFilter = urlParams.get('photo') || '';
   var initialStatusFilter = urlParams.get('status') || '';
+
   if (initialPhotoFilter) {
     searchInput.value = initialPhotoFilter;
+    enhSearchInput.value = initialPhotoFilter;
   }
   if (initialStatusFilter && ['all', 'unreviewed', 'confirmed', 'denied'].indexOf(initialStatusFilter) !== -1) {
     currentStatusFilter = initialStatusFilter;
-    tabButtons.forEach(function (btn) {
+    pairTabButtons.forEach(function (btn) {
       btn.classList.toggle('active', btn.getAttribute('data-status') === currentStatusFilter);
     });
   }
+  if (initialTab === 'enhancements' || initialTab === 'photos' || initialTab === 'compare') {
+    setMainTab('enhancements', false);
+  }
+
+  function setMainTab(tabName, pushUrl) {
+    activeMainTab = tabName === 'enhancements' ? 'enhancements' : 'pairings';
+    mainTabButtons.forEach(function (btn) {
+      var isAct = btn.getAttribute('data-main-tab') === activeMainTab;
+      btn.classList.toggle('active', isAct);
+      btn.setAttribute('aria-selected', isAct ? 'true' : 'false');
+    });
+    pairingsViewEl.classList.toggle('active', activeMainTab === 'pairings');
+    enhancementsViewEl.classList.toggle('active', activeMainTab === 'enhancements');
+
+    if (pushUrl !== false && window.history && window.history.replaceState) {
+      var u = new URL(window.location.href);
+      if (activeMainTab === 'enhancements') {
+        u.searchParams.set('tab', 'enhancements');
+      } else {
+        u.searchParams.delete('tab');
+      }
+      window.history.replaceState({}, '', u.toString());
+    }
+
+    updateStatsBanner();
+    if (activeMainTab === 'enhancements') {
+      renderEnhancementsUI();
+    } else {
+      renderUI();
+    }
+  }
+
+  mainTabButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setMainTab(btn.getAttribute('data-main-tab'), true);
+    });
+  });
 
   function showToast(msg) {
     toastEl.textContent = msg;
@@ -969,6 +1466,20 @@
     return [parts[0], parts[1]];
   }
 
+  function isPhotoUsingOriginal(p) {
+    if (!p || !p.orig_f) return false;
+    var list = overrides.use_original || [];
+    return list.indexOf(p.f) !== -1 || list.indexOf(p.orig_f) !== -1;
+  }
+
+  function getActivePhotoSrc(p) {
+    if (!p) return '';
+    if (isPhotoUsingOriginal(p)) {
+      return '/photos/originals/' + p.orig_f;
+    }
+    return '/photos/' + p.f;
+  }
+
   // Load Overrides from localStorage or server
   function loadOverrides() {
     var localData = null;
@@ -984,7 +1495,8 @@
         return res.json();
       })
       .then(function (serverData) {
-        overrides = serverData || { always_pair: [], never_pair: [], tags: {} };
+        overrides = serverData || { always_pair: [], never_pair: [], tags: {}, use_original: [] };
+        if (!Array.isArray(overrides.use_original)) overrides.use_original = [];
         if (localData) {
           mergeLocalOverrides(localData);
         }
@@ -995,24 +1507,21 @@
         saveBtn.textContent = 'Export Overrides';
         saveBtn.title = 'Download overrides.json';
         syncBtn.style.display = 'none';
-        document.querySelectorAll('.local-only-link').forEach(function (el) {
-          el.style.display = 'none';
-        });
-        // Fallback to static /photos/overrides.json or local storage
         return fetch('/photos/overrides.json', { cache: 'no-cache' })
           .then(function (res) { return res.ok ? res.json() : null; })
           .catch(function () { return null; })
           .then(function (fileData) {
+            overrides = fileData || { always_pair: [], never_pair: [], tags: {}, use_original: [] };
+            if (!Array.isArray(overrides.use_original)) overrides.use_original = [];
             if (localData) {
-              overrides = fileData || { always_pair: [], never_pair: [], tags: {} };
-              // Apply local browser edits on top of server overrides.json
               overrides.always_pair = localData.always_pair || overrides.always_pair || [];
               overrides.never_pair = localData.never_pair || overrides.never_pair || [];
+              if (Array.isArray(localData.use_original)) {
+                overrides.use_original = localData.use_original.slice();
+              }
               if (fileData) {
                 mergeLocalOverrides(fileData);
               }
-            } else {
-              overrides = fileData || { always_pair: [], never_pair: [], tags: {} };
             }
             updateSaveStatus(localData ? 'Loaded browser storage' : 'Loaded overrides.json');
           });
@@ -1040,6 +1549,17 @@
         neverMap[k] = true;
       }
     });
+
+    if (Array.isArray(local.use_original)) {
+      var origSet = {};
+      (overrides.use_original || []).forEach(function (fn) { origSet[fn] = true; });
+      local.use_original.forEach(function (fn) {
+        if (fn && !origSet[fn]) {
+          overrides.use_original.push(fn);
+          origSet[fn] = true;
+        }
+      });
+    }
   }
 
   function updateSaveStatus(msg, isSaved) {
@@ -1048,22 +1568,28 @@
   }
 
   function saveOverrides(isManualClick) {
-    // 1. Save to localStorage
+    if (!Array.isArray(overrides.use_original)) {
+      overrides.use_original = [];
+    }
     try {
       localStorage.setItem('display_overrides', JSON.stringify(overrides));
     } catch (e) {}
 
+    var origCount = (overrides.use_original || []).length;
+    var summaryText = (overrides.always_pair || []).length + ' confirmed · ' +
+                      (overrides.never_pair || []).length + ' denied' +
+                      (origCount > 0 ? (' · ' + origCount + ' original') : '');
+
     if (!isServerSynced) {
-      updateSaveStatus('Saved in browser (' + overrides.always_pair.length + ' confirmed · ' + overrides.never_pair.length + ' denied)', true);
+      updateSaveStatus('Saved in browser (' + summaryText + ')', true);
       if (isManualClick === true) {
         exportOverridesFile();
       } else {
-        showToast('Saved in browser (' + overrides.always_pair.length + ' confirmed · ' + overrides.never_pair.length + ' denied)');
+        showToast('Saved in browser (' + summaryText + ')');
       }
       return;
     }
 
-    // 2. Attempt save to server API
     updateSaveStatus('Saving...', false);
     fetch('/api/overrides', {
       method: 'POST',
@@ -1074,9 +1600,9 @@
       if (!res.ok) throw new Error('API save failed');
       return res.json();
     })
-    .then(function (data) {
+    .then(function () {
       updateSaveStatus('Saved to photos/overrides.json', true);
-      showToast('Saved ' + (overrides.always_pair.length) + ' confirmed & ' + (overrides.never_pair.length) + ' denied overrides.');
+      showToast('Saved overrides (' + summaryText + ')');
     })
     .catch(function () {
       updateSaveStatus('Saved in browser', true);
@@ -1104,20 +1630,460 @@
         syncBtn.disabled = false;
         syncBtn.textContent = 'Sync Kiosk';
         if (data.ok) {
-          showToast('Kiosk partner scores recomputed successfully!');
+          showToast('Kiosk manifest and partner scores synced!');
           setTimeout(function () { location.reload(); }, 1200);
         } else {
           alert('Sync error: ' + (data.error || 'Unknown error'));
         }
       })
-      .catch(function (err) {
+      .catch(function () {
         syncBtn.disabled = false;
         syncBtn.textContent = 'Sync Kiosk';
         alert('Server API unreachable. Run in terminal:\n/Users/don/Projects/display/.venv/bin/python3 scripts/sync-photos.py');
       });
   }
 
-  // Build Pair List
+  // ==================== ENHANCED PHOTOS LOGIC ====================
+  function setPhotoUseOriginal(photoFn, useOrig) {
+    var p = photoMap[photoFn];
+    if (!p || !p.orig_f) return;
+
+    var list = (overrides.use_original || []).filter(function (x) {
+      return x !== p.f && x !== p.orig_f;
+    });
+    if (useOrig) {
+      list.push(p.f);
+    }
+    overrides.use_original = list;
+    p.use_original = !!useOrig;
+
+    saveOverrides(false);
+    updateCounts();
+    renderEnhancementsUI();
+  }
+
+  function getFilteredEnhancedPhotos() {
+    var query = (enhSearchInput.value || '').trim().toLowerCase();
+    var sortVal = enhSortSelect.value;
+
+    var filtered = enhancedPhotos.filter(function (p) {
+      var usingOrig = isPhotoUsingOriginal(p);
+      var origLongest = Math.max(p.orig_w || p.w || 0, p.orig_h || p.h || 0);
+
+      if (currentEnhFilter === 'enhanced' && usingOrig) return false;
+      if (currentEnhFilter === 'original' && !usingOrig) return false;
+      if (currentEnhFilter === 'sub1080' && origLongest >= 1080) return false;
+
+      if (query) {
+        var fMatch = p.f.toLowerCase().indexOf(query) !== -1;
+        var origMatch = p.orig_f && p.orig_f.toLowerCase().indexOf(query) !== -1;
+        var capMatch = p.caption && p.caption.toLowerCase().indexOf(query) !== -1;
+        var dateMatch = p.date && p.date.indexOf(query) !== -1;
+        var tagMatch = p.tags && JSON.stringify(p.tags).toLowerCase().indexOf(query) !== -1;
+        if (!fMatch && !origMatch && !capMatch && !dateMatch && !tagMatch) return false;
+      }
+      return true;
+    });
+
+    filtered.sort(function (a, b) {
+      var aOrigMax = Math.max(a.orig_w || a.w || 1, a.orig_h || a.h || 1);
+      var bOrigMax = Math.max(b.orig_w || b.w || 1, b.orig_h || b.h || 1);
+      var aEnhMax = Math.max(a.w || 1, a.h || 1);
+      var bEnhMax = Math.max(b.w || 1, b.h || 1);
+
+      if (sortVal === 'orig-res-asc') {
+        if (aOrigMax !== bOrigMax) return aOrigMax - bOrigMax;
+        return a.f.localeCompare(b.f);
+      }
+      if (sortVal === 'scale-desc') {
+        var scaleA = aEnhMax / aOrigMax;
+        var scaleB = bEnhMax / bOrigMax;
+        if (Math.abs(scaleB - scaleA) > 0.01) return scaleB - scaleA;
+        return aOrigMax - bOrigMax;
+      }
+      if (sortVal === 'reverted-first') {
+        var uA = isPhotoUsingOriginal(a) ? 0 : 1;
+        var uB = isPhotoUsingOriginal(b) ? 0 : 1;
+        if (uA !== uB) return uA - uB;
+        return aOrigMax - bOrigMax;
+      }
+      if (sortVal === 'date-desc') {
+        return (b.date || '').localeCompare(a.date || '');
+      }
+      if (sortVal === 'fn-asc') {
+        return a.f.localeCompare(b.f);
+      }
+      return 0;
+    });
+
+    return filtered;
+  }
+
+  function bindZoomPan(stageEl, cardEl) {
+    stageEl.addEventListener('mousemove', function (e) {
+      if (!cardEl.classList.contains('zoomed')) return;
+      var rect = stageEl.getBoundingClientRect();
+      var xPct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / Math.max(1, rect.width)) * 100));
+      var yPct = Math.max(0, Math.min(100, ((e.clientY - rect.top) / Math.max(1, rect.height)) * 100));
+      cardEl.style.setProperty('--zoom-x', xPct.toFixed(1) + '%');
+      cardEl.style.setProperty('--zoom-y', yPct.toFixed(1) + '%');
+    });
+  }
+
+  function renderEnhancementsUI() {
+    updateCounts();
+    var filtered = getFilteredEnhancedPhotos();
+    var compareMode = enhCompareModeSelect.value;
+
+    enhGridEl.innerHTML = '';
+    if (filtered.length === 0) {
+      enhGridEl.innerHTML = '<div class="empty-state">No enhanced photos match your current filter.</div>';
+      return;
+    }
+
+    var fragment = document.createDocumentFragment();
+
+    filtered.forEach(function (p, idx) {
+      var usingOrig = isPhotoUsingOriginal(p);
+      var origW = p.orig_w || p.w;
+      var origH = p.orig_h || p.h;
+      var enhW = p.w;
+      var enhH = p.h;
+      var scaleFactor = (Math.max(enhW, enhH) / Math.max(1, Math.max(origW, origH))).toFixed(1);
+      var origSrc = '/photos/originals/' + p.orig_f;
+      var enhSrc = '/photos/' + p.f;
+      var isPriorityCard = idx < 2;
+
+      var card = document.createElement('div');
+      card.className = 'enh-card' +
+        (usingOrig ? ' is-original' : '') +
+        (idx === focusedEnhIndex ? ' active-focused' : '') +
+        (globalEnhZoom ? ' zoomed' : '') +
+        (idx >= 4 ? ' deferred-card' : '');
+      card.id = 'enh-' + p.f.replace('.', '-');
+      card.setAttribute('data-photo-fn', p.f);
+
+      // 1. Header
+      var header = document.createElement('div');
+      header.className = 'card-header';
+
+      var leftInfo = document.createElement('div');
+      leftInfo.style.display = 'flex';
+      leftInfo.style.alignItems = 'center';
+      leftInfo.style.gap = '8px';
+      leftInfo.style.minWidth = '0';
+
+      var idSpan = document.createElement('span');
+      idSpan.className = 'pair-id';
+      idSpan.textContent = '#' + (idx + 1);
+
+      var namesDiv = document.createElement('div');
+      namesDiv.className = 'pair-names';
+      var fnLink = document.createElement('a');
+      fnLink.href = getActivePhotoSrc(p);
+      fnLink.target = '_blank';
+      fnLink.textContent = p.f;
+      namesDiv.appendChild(fnLink);
+
+      if (p.date) {
+        var dateSpan = document.createElement('span');
+        dateSpan.style.color = 'var(--text-faint)';
+        dateSpan.textContent = '· ' + p.date.slice(0, 10);
+        namesDiv.appendChild(dateSpan);
+      }
+
+      leftInfo.appendChild(idSpan);
+      leftInfo.appendChild(namesDiv);
+
+      var rightBadges = document.createElement('div');
+      rightBadges.className = 'header-badges';
+
+      var scaleBadge = document.createElement('span');
+      scaleBadge.className = 'score-badge' + (parseFloat(scaleFactor) >= 2.5 ? ' high' : '');
+      scaleBadge.textContent = origW + '×' + origH + ' \u2192 ' + enhW + '×' + enhH + ' (' + scaleFactor + '×)';
+
+      var stateBadge = document.createElement('span');
+      stateBadge.className = 'state-badge ' + (usingOrig ? 'original-active' : 'confirmed');
+      stateBadge.textContent = usingOrig ? 'Original Active' : 'Enhanced Active';
+
+      rightBadges.appendChild(scaleBadge);
+      rightBadges.appendChild(stateBadge);
+
+      header.appendChild(leftInfo);
+      header.appendChild(rightBadges);
+      card.appendChild(header);
+
+      // 2. Actions Bar
+      var actions = document.createElement('div');
+      actions.className = 'card-actions';
+
+      var btnGroup = document.createElement('div');
+      btnGroup.className = 'action-buttons';
+
+      var useEnhBtn = document.createElement('button');
+      useEnhBtn.type = 'button';
+      useEnhBtn.className = 'action-btn confirm-btn' + (!usingOrig ? ' active' : '');
+      useEnhBtn.textContent = '\u2713 Use Enhanced';
+      useEnhBtn.title = 'Display Real-ESRGAN enhanced photo on kiosk (Key: E)';
+      useEnhBtn.addEventListener('click', function () {
+        focusedEnhIndex = idx;
+        setPhotoUseOriginal(p.f, false);
+      });
+
+      var useOrigBtn = document.createElement('button');
+      useOrigBtn.type = 'button';
+      useOrigBtn.className = 'action-btn orig-btn' + (usingOrig ? ' active' : '');
+      useOrigBtn.textContent = '\u21ba Switch to Original';
+      useOrigBtn.title = 'Revert this photo to its untouched original on kiosk (Key: O)';
+      useOrigBtn.addEventListener('click', function () {
+        focusedEnhIndex = idx;
+        setPhotoUseOriginal(p.f, true);
+      });
+
+      var loupeBtn = document.createElement('button');
+      loupeBtn.type = 'button';
+      loupeBtn.className = 'action-btn reset-btn';
+      loupeBtn.textContent = card.classList.contains('zoomed') ? '1\u00d7 Fit' : '2\u00d7 Zoom';
+      loupeBtn.title = 'Toggle 2.25x detail zoom on this photo';
+      loupeBtn.addEventListener('click', function () {
+        var z = card.classList.toggle('zoomed');
+        loupeBtn.textContent = z ? '1\u00d7 Fit' : '2\u00d7 Zoom';
+      });
+
+      btnGroup.appendChild(useEnhBtn);
+      btnGroup.appendChild(useOrigBtn);
+      btnGroup.appendChild(loupeBtn);
+
+      var jumpPairsBtn = document.createElement('button');
+      jumpPairsBtn.type = 'button';
+      jumpPairsBtn.className = 'action-btn reset-btn';
+      jumpPairsBtn.style.fontSize = '11px';
+      jumpPairsBtn.textContent = 'View Pairings \u2192';
+      jumpPairsBtn.addEventListener('click', function () {
+        searchInput.value = p.f;
+        focusedPairIndex = 0;
+        setMainTab('pairings', true);
+      });
+
+      actions.appendChild(btnGroup);
+      actions.appendChild(jumpPairsBtn);
+      card.appendChild(actions);
+
+      // 3. Stage (Side-by-Side, Split Slider, or Flip)
+      if (compareMode === 'side') {
+        var stageSide = document.createElement('div');
+        stageSide.className = 'enh-stage-side';
+
+        var paneOrig = document.createElement('div');
+        paneOrig.className = 'enh-pane';
+        var imgOrig = document.createElement('img');
+        imgOrig.src = origSrc;
+        imgOrig.alt = 'Original ' + p.orig_f;
+        imgOrig.width = origW;
+        imgOrig.height = origH;
+        if (!isPriorityCard) {
+          imgOrig.loading = 'lazy';
+          imgOrig.decoding = 'async';
+        } else if (idx === 0) {
+          imgOrig.setAttribute('fetchpriority', 'high');
+        }
+        var tagOrig = document.createElement('span');
+        tagOrig.className = 'enh-pane-tag' + (usingOrig ? ' is-active-orig' : '');
+        tagOrig.textContent = 'Original · ' + origW + '×' + origH + (p.orig_kb ? (' · ' + Math.round(p.orig_kb) + ' KB') : '');
+        paneOrig.appendChild(imgOrig);
+        paneOrig.appendChild(tagOrig);
+
+        var paneEnh = document.createElement('div');
+        paneEnh.className = 'enh-pane';
+        var imgEnh = document.createElement('img');
+        imgEnh.src = enhSrc;
+        imgEnh.alt = 'Enhanced ' + p.f;
+        imgEnh.width = enhW;
+        imgEnh.height = enhH;
+        if (!isPriorityCard) {
+          imgEnh.loading = 'lazy';
+          imgEnh.decoding = 'async';
+        } else if (idx === 0) {
+          imgEnh.setAttribute('fetchpriority', 'high');
+        }
+        var tagEnh = document.createElement('span');
+        tagEnh.className = 'enh-pane-tag' + (!usingOrig ? ' is-active-source' : '');
+        tagEnh.textContent = 'Enhanced · ' + enhW + '×' + enhH + (p.enh_kb ? (' · ' + Math.round(p.enh_kb) + ' KB') : '');
+        paneEnh.appendChild(imgEnh);
+        paneEnh.appendChild(tagEnh);
+
+        var toggleCardZoom = function () {
+          var z = card.classList.toggle('zoomed');
+          loupeBtn.textContent = z ? '1\u00d7 Fit' : '2\u00d7 Zoom';
+        };
+        paneOrig.addEventListener('click', toggleCardZoom);
+        paneEnh.addEventListener('click', toggleCardZoom);
+        bindZoomPan(stageSide, card);
+
+        stageSide.appendChild(paneOrig);
+        stageSide.appendChild(paneEnh);
+        card.appendChild(stageSide);
+      } else if (compareMode === 'slider') {
+        var stageSlider = document.createElement('div');
+        stageSlider.className = 'enh-stage-slider';
+        stageSlider.style.setProperty('--split-pct', '50%');
+
+        var afterLayer = document.createElement('div');
+        afterLayer.className = 'enh-slider-layer enh-slider-after';
+        var imgAfter = document.createElement('img');
+        imgAfter.src = enhSrc;
+        imgAfter.alt = 'Enhanced ' + p.f;
+        imgAfter.width = enhW;
+        imgAfter.height = enhH;
+        if (!isPriorityCard) {
+          imgAfter.loading = 'lazy';
+          imgAfter.decoding = 'async';
+        }
+        afterLayer.appendChild(imgAfter);
+
+        var beforeLayer = document.createElement('div');
+        beforeLayer.className = 'enh-slider-layer enh-slider-before';
+        var imgBefore = document.createElement('img');
+        imgBefore.src = origSrc;
+        imgBefore.alt = 'Original ' + p.orig_f;
+        imgBefore.width = origW;
+        imgBefore.height = origH;
+        if (!isPriorityCard) {
+          imgBefore.loading = 'lazy';
+          imgBefore.decoding = 'async';
+        }
+        beforeLayer.appendChild(imgBefore);
+
+        var tagLeft = document.createElement('span');
+        tagLeft.className = 'enh-pane-tag' + (usingOrig ? ' is-active-orig' : '');
+        tagLeft.style.zIndex = '4';
+        tagLeft.textContent = 'Original (' + origW + '×' + origH + ')';
+
+        var tagRight = document.createElement('span');
+        tagRight.className = 'enh-pane-tag' + (!usingOrig ? ' is-active-source' : '');
+        tagRight.style.left = 'auto';
+        tagRight.style.right = '8px';
+        tagRight.style.zIndex = '4';
+        tagRight.textContent = 'Enhanced (' + enhW + '×' + enhH + ')';
+
+        var divider = document.createElement('div');
+        divider.className = 'enh-slider-divider';
+        var handle = document.createElement('div');
+        handle.className = 'enh-slider-handle';
+        handle.textContent = '\u2194';
+
+        var rangeInput = document.createElement('input');
+        rangeInput.type = 'range';
+        rangeInput.className = 'enh-slider-input';
+        rangeInput.min = '0';
+        rangeInput.max = '100';
+        rangeInput.value = '50';
+        rangeInput.setAttribute('aria-label', 'Split comparison slider for ' + p.f);
+        rangeInput.addEventListener('input', function () {
+          stageSlider.style.setProperty('--split-pct', rangeInput.value + '%');
+        });
+
+        bindZoomPan(stageSlider, card);
+
+        stageSlider.appendChild(afterLayer);
+        stageSlider.appendChild(beforeLayer);
+        stageSlider.appendChild(tagLeft);
+        stageSlider.appendChild(tagRight);
+        stageSlider.appendChild(divider);
+        stageSlider.appendChild(handle);
+        stageSlider.appendChild(rangeInput);
+        card.appendChild(stageSlider);
+      } else {
+        // Flip in place mode
+        var stageFlip = document.createElement('div');
+        stageFlip.className = 'enh-stage-flip';
+        var showingOrig = false;
+
+        var imgFlip = document.createElement('img');
+        imgFlip.src = enhSrc;
+        imgFlip.alt = p.f;
+        imgFlip.width = enhW;
+        imgFlip.height = enhH;
+        if (!isPriorityCard) {
+          imgFlip.loading = 'lazy';
+          imgFlip.decoding = 'async';
+        }
+
+        var tagFlip = document.createElement('span');
+        tagFlip.className = 'enh-pane-tag is-active-source';
+        tagFlip.textContent = 'Viewing: Enhanced (' + enhW + '×' + enhH + ')';
+
+        var hintFlip = document.createElement('span');
+        hintFlip.className = 'enh-flip-hint';
+        hintFlip.textContent = 'Click image or press Space to flip Original / Enhanced';
+
+        var toggleFlip = function () {
+          showingOrig = !showingOrig;
+          imgFlip.src = showingOrig ? origSrc : enhSrc;
+          tagFlip.textContent = showingOrig
+            ? ('Viewing: Original (' + origW + '×' + origH + ')')
+            : ('Viewing: Enhanced (' + enhW + '×' + enhH + ')');
+          tagFlip.className = 'enh-pane-tag ' + (showingOrig ? 'is-active-orig' : 'is-active-source');
+        };
+
+        stageFlip.addEventListener('click', toggleFlip);
+        card._toggleFlip = toggleFlip;
+        bindZoomPan(stageFlip, card);
+
+        stageFlip.appendChild(imgFlip);
+        stageFlip.appendChild(tagFlip);
+        stageFlip.appendChild(hintFlip);
+        card.appendChild(stageFlip);
+      }
+
+      // 4. Footer Meta
+      var meta = document.createElement('div');
+      meta.className = 'card-meta';
+
+      var row = document.createElement('div');
+      row.className = 'breakdown-row';
+
+      var origMp = ((origW * origH) / 1000000).toFixed(2);
+      var enhMp = ((enhW * enhH) / 1000000).toFixed(2);
+      var resPill = document.createElement('span');
+      resPill.className = 'reason-pill ' + (Math.max(origW, origH) < 1080 ? 'amber' : 'positive');
+      resPill.textContent = origMp + ' MP \u2192 ' + enhMp + ' MP';
+      row.appendChild(resPill);
+
+      if (p.orig_kb && p.enh_kb) {
+        var kbPill = document.createElement('span');
+        kbPill.className = 'reason-pill';
+        kbPill.textContent = Math.round(p.orig_kb) + ' KB \u2192 ' + Math.round(p.enh_kb) + ' KB';
+        row.appendChild(kbPill);
+      }
+
+      if (p.caption) {
+        var capPill = document.createElement('span');
+        capPill.className = 'reason-pill';
+        capPill.textContent = p.caption;
+        row.appendChild(capPill);
+      }
+
+      var origLink = document.createElement('a');
+      origLink.href = origSrc;
+      origLink.target = '_blank';
+      origLink.style.marginLeft = 'auto';
+      origLink.style.fontSize = '11px';
+      origLink.style.color = 'var(--text-muted)';
+      origLink.style.textDecoration = 'none';
+      origLink.textContent = 'Original (' + p.orig_f + ') \u2197';
+      row.appendChild(origLink);
+
+      meta.appendChild(row);
+      card.appendChild(meta);
+
+      fragment.appendChild(card);
+    });
+
+    enhGridEl.appendChild(fragment);
+  }
+
+  // ==================== BUILD PAIR LIST ====================
   function buildPairs() {
     var pairsMap = {};
 
@@ -1131,7 +2097,6 @@
       neverMap[normPairKey(p[0], p[1])] = true;
     });
 
-    // 1. Process suggested partners and alts from photos.json
     allPhotos.forEach(function (p1) {
       var partners = p1.partners || [];
       partners.forEach(function (item) {
@@ -1186,7 +2151,6 @@
       });
     });
 
-    // 2. Process any manual always_pair / never_pair that weren't in top lists
     (overrides.always_pair || []).forEach(function (p) {
       var key = normPairKey(p[0], p[1]);
       if (!pairsMap[key]) {
@@ -1236,7 +2200,6 @@
       reasons.push({ text: 'Color compatibility alone (alt): ' + Number(score).toFixed(2), type: 'positive' });
     }
 
-    // Date
     if (p1.date && p2.date) {
       var d1 = p1.date.slice(0, 10);
       var d2 = p2.date.slice(0, 10);
@@ -1254,12 +2217,10 @@
       }
     }
 
-    // Geo
     if (p1.geo && p2.geo) {
       reasons.push({ text: 'Geo match (+0.15)', type: 'positive' });
     }
 
-    // Tags
     var t1 = p1.tags || {};
     var t2 = p2.tags || {};
     if (t1.event_hint && t2.event_hint && t1.event_hint === t2.event_hint && t1.event_hint !== 'everyday') {
@@ -1269,7 +2230,6 @@
       reasons.push({ text: 'Shared scene: ' + t1.scene + ' (+0.10)', type: 'positive' });
     }
 
-    // Subjects
     var s1 = t1.subjects || [];
     var s2 = t2.subjects || [];
     var sharedSub = s1.filter(function (x) { return s2.indexOf(x) !== -1; });
@@ -1277,7 +2237,6 @@
       reasons.push({ text: 'Shared: ' + sharedSub.join(', '), type: 'positive' });
     }
 
-    // Learned preference signals (matched dimensions / aspect ratio)
     if (p1.w && p1.h && p2.w && p2.h) {
       if (p1.w === p2.w && p1.h === p2.h) {
         reasons.push({ text: 'Matched dimensions (' + p1.w + '×' + p1.h + ') · learned', type: 'positive' });
@@ -1286,7 +2245,6 @@
       }
     }
 
-    // Luma diff penalty
     if (p1.luma !== undefined && p2.luma !== undefined) {
       var lumaDiff = Math.abs(p1.luma - p2.luma);
       if (lumaDiff > 0.45) {
@@ -1297,22 +2255,18 @@
     return reasons;
   }
 
-  // Filter & Sort Pairs
   function getFilteredPairs() {
     var query = (searchInput.value || '').trim().toLowerCase();
     var minScore = parseFloat(scoreFilterEl.value) || 0.0;
     var sortVal = sortSelect.value;
 
     var filtered = allPairs.filter(function (pair) {
-      // Status filter
       if (currentStatusFilter === 'confirmed' && pair.state !== 'confirmed') return false;
       if (currentStatusFilter === 'denied' && pair.state !== 'denied') return false;
       if (currentStatusFilter === 'unreviewed' && pair.state !== 'suggested') return false;
 
-      // Score filter
       if (pair.state !== 'confirmed' && pair.originalScore < minScore) return false;
 
-      // Query filter
       if (query) {
         var f1Match = pair.p1.f.toLowerCase().indexOf(query) !== -1;
         var f2Match = pair.p2.f.toLowerCase().indexOf(query) !== -1;
@@ -1326,7 +2280,6 @@
       return true;
     });
 
-    // Sorting
     filtered.sort(function (a, b) {
       if (sortVal === 'score-desc') return b.score - a.score;
       if (sortVal === 'score-asc') return a.score - b.score;
@@ -1346,7 +2299,6 @@
     return filtered;
   }
 
-  // Confirm a pair
   function confirmPair(pairKey) {
     var pair = allPairs.find(function (p) { return p.key === pairKey; });
     if (!pair) return;
@@ -1355,12 +2307,10 @@
     pair.score = 1.0;
 
     var parts = parsePairKey(pairKey);
-    // Remove from never_pair
     overrides.never_pair = (overrides.never_pair || []).filter(function (p) {
       return normPairKey(p[0], p[1]) !== pairKey;
     });
 
-    // Add to always_pair
     var exists = (overrides.always_pair || []).some(function (p) {
       return normPairKey(p[0], p[1]) === pairKey;
     });
@@ -1372,7 +2322,6 @@
     renderUI();
   }
 
-  // Deny a pair
   function denyPair(pairKey) {
     var pair = allPairs.find(function (p) { return p.key === pairKey; });
     if (!pair) return;
@@ -1381,12 +2330,10 @@
     pair.score = 0.0;
 
     var parts = parsePairKey(pairKey);
-    // Remove from always_pair
     overrides.always_pair = (overrides.always_pair || []).filter(function (p) {
       return normPairKey(p[0], p[1]) !== pairKey;
     });
 
-    // Add to never_pair
     var exists = (overrides.never_pair || []).some(function (p) {
       return normPairKey(p[0], p[1]) === pairKey;
     });
@@ -1398,7 +2345,6 @@
     renderUI();
   }
 
-  // Reset a pair to suggested
   function resetPair(pairKey) {
     var pair = allPairs.find(function (p) { return p.key === pairKey; });
     if (!pair) return;
@@ -1417,6 +2363,23 @@
     renderUI();
   }
 
+  function updateStatsBanner() {
+    var totalPairs = allPairs.length;
+    var confirmed = allPairs.filter(function (p) { return p.state === 'confirmed'; }).length;
+    var denied = allPairs.filter(function (p) { return p.state === 'denied'; }).length;
+    var unreviewed = totalPairs - confirmed - denied;
+
+    var totalEnh = enhancedPhotos.length;
+    var origActiveCount = enhancedPhotos.filter(function (p) { return isPhotoUsingOriginal(p); }).length;
+    var enhActiveCount = totalEnh - origActiveCount;
+
+    if (activeMainTab === 'enhancements') {
+      statsEl.textContent = totalEnh + ' enhanced (' + enhActiveCount + ' using enhanced · ' + origActiveCount + ' reverted to original)';
+    } else {
+      statsEl.textContent = totalPairs + ' pairs (' + confirmed + ' confirmed · ' + denied + ' denied · ' + unreviewed + ' unreviewed)';
+    }
+  }
+
   function updateCounts() {
     var total = allPairs.length;
     var confirmed = allPairs.filter(function (p) { return p.state === 'confirmed'; }).length;
@@ -1427,11 +2390,25 @@
     countUnreviewedEl.textContent = unreviewed;
     countConfirmedEl.textContent = confirmed;
     countDeniedEl.textContent = denied;
+    mainCountPairingsEl.textContent = total;
 
-    statsEl.textContent = total + ' pairs (' + confirmed + ' confirmed · ' + denied + ' denied · ' + unreviewed + ' unreviewed)';
+    var totalEnh = enhancedPhotos.length;
+    var origActive = enhancedPhotos.filter(function (p) { return isPhotoUsingOriginal(p); }).length;
+    var enhActive = totalEnh - origActive;
+    var sub1080 = enhancedPhotos.filter(function (p) {
+      return Math.max(p.orig_w || p.w || 0, p.orig_h || p.h || 0) < 1080;
+    }).length;
+
+    enhCountAllEl.textContent = totalEnh;
+    enhCountEnhancedEl.textContent = enhActive;
+    enhCountOriginalEl.textContent = origActive;
+    enhCountSub1080El.textContent = sub1080;
+    mainCountEnhancementsEl.textContent = totalEnh;
+
+    updateStatsBanner();
   }
 
-  // Render Grid
+  // Render Pairings Grid
   function renderUI() {
     updateCounts();
     var filtered = getFilteredPairs();
@@ -1449,11 +2426,12 @@
 
     filtered.forEach(function (pair, idx) {
       var card = document.createElement('div');
-      card.className = 'pair-card is-' + pair.state + (idx === focusedPairIndex ? ' active-focused' : '');
+      card.className = 'pair-card is-' + pair.state +
+        (idx === focusedPairIndex ? ' active-focused' : '') +
+        (idx >= 6 ? ' deferred-card' : '');
       card.id = 'pair-' + pair.key.replace(/[:.]/g, '-');
       card.setAttribute('data-pair-key', pair.key);
 
-      // Card Header
       var header = document.createElement('div');
       header.className = 'card-header';
 
@@ -1469,14 +2447,14 @@
       var namesDiv = document.createElement('div');
       namesDiv.className = 'pair-names';
       var a1 = document.createElement('a');
-      a1.href = isServerSynced ? ('/review.html#photo-' + pair.p1.f.replace('.', '-')) : ('/photos/' + pair.p1.f);
+      a1.href = getActivePhotoSrc(pair.p1);
       a1.target = '_blank';
       a1.textContent = pair.p1.f;
       var plus = document.createElement('span');
       plus.className = 'pair-plus';
       plus.textContent = '+';
       var a2 = document.createElement('a');
-      a2.href = isServerSynced ? ('/review.html#photo-' + pair.p2.f.replace('.', '-')) : ('/photos/' + pair.p2.f);
+      a2.href = getActivePhotoSrc(pair.p2);
       a2.target = '_blank';
       a2.textContent = pair.p2.f;
 
@@ -1493,12 +2471,10 @@
       var sourceBadge = document.createElement('span');
       sourceBadge.className = 'source-badge ' + (pair.source || 'partner');
       sourceBadge.textContent = pair.source || 'partner';
-      sourceBadge.title = 'Pair source: ' + (pair.source || 'partner');
 
       var scoreBadge = document.createElement('span');
       scoreBadge.className = 'score-badge' + (pair.score >= 0.5 ? ' high' : '') + (pair.state === 'confirmed' ? ' confirmed' : '');
       scoreBadge.textContent = pair.score.toFixed(3);
-      scoreBadge.title = 'Pair Score: ' + pair.score.toFixed(3);
 
       var stateBadge = document.createElement('span');
       stateBadge.className = 'state-badge ' + pair.state;
@@ -1512,7 +2488,6 @@
       header.appendChild(rightBadges);
       card.appendChild(header);
 
-      // Photos Stage
       var stage = document.createElement('div');
       stage.className = 'photos-stage';
 
@@ -1531,23 +2506,22 @@
           return v;
         }
         var img = document.createElement('img');
-        img.src = '/photos/' + p.f;
+        img.src = getActivePhotoSrc(p);
         img.loading = 'lazy';
+        img.decoding = 'async';
         img.alt = p.f;
         return img;
       }
 
-      // Frame 1
       var frame1 = document.createElement('div');
       frame1.className = 'photo-frame';
-      var img1 = createFrameMedia(pair.p1);
-      frame1.appendChild(img1);
+      frame1.appendChild(createFrameMedia(pair.p1));
 
       var f1Info = document.createElement('div');
       f1Info.className = 'frame-info';
       var f1Fn = document.createElement('span');
       f1Fn.className = 'frame-fn';
-      f1Fn.textContent = pair.p1.caption || pair.p1.f;
+      f1Fn.textContent = (pair.p1.caption || pair.p1.f) + (isPhotoUsingOriginal(pair.p1) ? ' (orig)' : '');
       var f1Date = document.createElement('span');
       f1Date.className = 'frame-date';
       f1Date.textContent = pair.p1.date ? pair.p1.date.slice(0, 10) : '';
@@ -1555,17 +2529,15 @@
       f1Info.appendChild(f1Date);
       frame1.appendChild(f1Info);
 
-      // Frame 2
       var frame2 = document.createElement('div');
       frame2.className = 'photo-frame';
-      var img2 = createFrameMedia(pair.p2);
-      frame2.appendChild(img2);
+      frame2.appendChild(createFrameMedia(pair.p2));
 
       var f2Info = document.createElement('div');
       f2Info.className = 'frame-info';
       var f2Fn = document.createElement('span');
       f2Fn.className = 'frame-fn';
-      f2Fn.textContent = pair.p2.caption || pair.p2.f;
+      f2Fn.textContent = (pair.p2.caption || pair.p2.f) + (isPhotoUsingOriginal(pair.p2) ? ' (orig)' : '');
       var f2Date = document.createElement('span');
       f2Date.className = 'frame-date';
       f2Date.textContent = pair.p2.date ? pair.p2.date.slice(0, 10) : '';
@@ -1573,39 +2545,29 @@
       f2Info.appendChild(f2Date);
       frame2.appendChild(f2Info);
 
-      // Card Actions
       var actions = document.createElement('div');
       actions.className = 'card-actions';
 
       var btnGroup = document.createElement('div');
       btnGroup.className = 'action-buttons';
 
-      // Confirm Button
       var confirmBtn = document.createElement('button');
+      confirmBtn.type = 'button';
       confirmBtn.className = 'action-btn confirm-btn' + (pair.state === 'confirmed' ? ' active' : '');
-      confirmBtn.innerHTML = '✓ Confirm';
-      confirmBtn.title = 'Always pair these two photos (Key: C)';
-      confirmBtn.addEventListener('click', function () {
-        confirmPair(pair.key);
-      });
+      confirmBtn.textContent = '\u2713 Confirm';
+      confirmBtn.addEventListener('click', function () { confirmPair(pair.key); });
 
-      // Deny Button
       var denyBtn = document.createElement('button');
+      denyBtn.type = 'button';
       denyBtn.className = 'action-btn deny-btn' + (pair.state === 'denied' ? ' active' : '');
-      denyBtn.innerHTML = '✕ Deny';
-      denyBtn.title = 'Never pair these two photos (Key: D)';
-      denyBtn.addEventListener('click', function () {
-        denyPair(pair.key);
-      });
+      denyBtn.textContent = '\u2715 Deny';
+      denyBtn.addEventListener('click', function () { denyPair(pair.key); });
 
-      // Reset Button
       var resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
       resetBtn.className = 'action-btn reset-btn';
-      resetBtn.innerHTML = '↺ Reset';
-      resetBtn.title = 'Reset to algorithm suggestion (Key: R)';
-      resetBtn.addEventListener('click', function () {
-        resetPair(pair.key);
-      });
+      resetBtn.textContent = '\u21ba Reset';
+      resetBtn.addEventListener('click', function () { resetPair(pair.key); });
 
       btnGroup.appendChild(confirmBtn);
       btnGroup.appendChild(denyBtn);
@@ -1629,7 +2591,6 @@
       stage.appendChild(frame2);
       card.appendChild(stage);
 
-      // Card Meta / Reasons
       var meta = document.createElement('div');
       meta.className = 'card-meta';
 
@@ -1650,7 +2611,6 @@
       }
       meta.appendChild(reasonsRow);
 
-      // Palettes Comparison
       if (pair.p1.palette && pair.p2.palette) {
         var palRow = document.createElement('div');
         palRow.className = 'palettes-compare';
@@ -1681,16 +2641,59 @@
       }
 
       card.appendChild(meta);
-
       fragment.appendChild(card);
     });
 
     pairsGridEl.appendChild(fragment);
   }
 
-  // Keyboard navigation & review
+  // Keyboard navigation & review for both tabs
   document.addEventListener('keydown', function (e) {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    if (activeMainTab === 'enhancements') {
+      var filteredEnh = getFilteredEnhancedPhotos();
+      if (!filteredEnh.length) return;
+
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedEnhIndex = Math.min(filteredEnh.length - 1, focusedEnhIndex + 1);
+        scrollToFocusedEnh(filteredEnh);
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedEnhIndex = Math.max(0, focusedEnhIndex - 1);
+        scrollToFocusedEnh(filteredEnh);
+      } else if (e.key === 'o' || e.key === 'O') {
+        e.preventDefault();
+        if (filteredEnh[focusedEnhIndex]) {
+          setPhotoUseOriginal(filteredEnh[focusedEnhIndex].f, true);
+          scrollToFocusedEnh(filteredEnh);
+        }
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        if (filteredEnh[focusedEnhIndex]) {
+          setPhotoUseOriginal(filteredEnh[focusedEnhIndex].f, false);
+          scrollToFocusedEnh(filteredEnh);
+        }
+      } else if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        var curP = filteredEnh[focusedEnhIndex];
+        if (curP) {
+          var curEl = document.getElementById('enh-' + curP.f.replace('.', '-'));
+          if (curEl) curEl.classList.toggle('zoomed');
+        }
+      } else if (e.key === ' ') {
+        var curPhoto = filteredEnh[focusedEnhIndex];
+        if (curPhoto) {
+          var cardEl = document.getElementById('enh-' + curPhoto.f.replace('.', '-'));
+          if (cardEl && typeof cardEl._toggleFlip === 'function') {
+            e.preventDefault();
+            cardEl._toggleFlip();
+          }
+        }
+      }
       return;
     }
 
@@ -1740,10 +2743,23 @@
     }
   }
 
-  // Filter Event Listeners
-  tabButtons.forEach(function (btn) {
+  function scrollToFocusedEnh(filtered) {
+    var p = filtered[focusedEnhIndex];
+    if (!p) return;
+    var el = document.getElementById('enh-' + p.f.replace('.', '-'));
+    if (el) {
+      document.querySelectorAll('.enh-card.active-focused').forEach(function (c) {
+        c.classList.remove('active-focused');
+      });
+      el.classList.add('active-focused');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // Pairings Filter Event Listeners
+  pairTabButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
-      tabButtons.forEach(function (b) { b.classList.remove('active'); });
+      pairTabButtons.forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       currentStatusFilter = btn.getAttribute('data-status');
       focusedPairIndex = 0;
@@ -1768,6 +2784,40 @@
 
   viewModeSelect.addEventListener('change', function () {
     renderUI();
+  });
+
+  // Enhancements Filter Event Listeners
+  enhFilterButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      enhFilterButtons.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentEnhFilter = btn.getAttribute('data-enh-filter');
+      focusedEnhIndex = 0;
+      renderEnhancementsUI();
+    });
+  });
+
+  enhSearchInput.addEventListener('input', function () {
+    focusedEnhIndex = 0;
+    renderEnhancementsUI();
+  });
+
+  enhSortSelect.addEventListener('change', function () {
+    focusedEnhIndex = 0;
+    renderEnhancementsUI();
+  });
+
+  enhCompareModeSelect.addEventListener('change', function () {
+    renderEnhancementsUI();
+  });
+
+  enhZoomBtn.addEventListener('click', function () {
+    globalEnhZoom = !globalEnhZoom;
+    enhZoomBtn.classList.toggle('active-toggle', globalEnhZoom);
+    enhZoomBtn.textContent = globalEnhZoom ? '1\u00d7 Fit All' : '2\u00d7 Detail Loupe';
+    document.querySelectorAll('.enh-card').forEach(function (c) {
+      c.classList.toggle('zoomed', globalEnhZoom);
+    });
   });
 
   saveBtn.addEventListener('click', function () { saveOverrides(true); });
@@ -1827,9 +2877,20 @@
     })
     .then(function (photos) {
       allPhotos = photos;
-      photos.forEach(function (p) { photoMap[p.f] = p; });
+      enhancedPhotos = [];
+      photos.forEach(function (p) {
+        photoMap[p.f] = p;
+        if (p.orig_f) {
+          enhancedPhotos.push(p);
+        }
+      });
       buildPairs();
-      renderUI();
+      updateCounts();
+      if (activeMainTab === 'enhancements') {
+        renderEnhancementsUI();
+      } else {
+        renderUI();
+      }
     })
     .catch(function (err) {
       statsEl.textContent = 'Error loading data: ' + err.message;

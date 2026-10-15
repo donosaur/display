@@ -5,9 +5,9 @@ photos.debug.json
 .venv/
 .env
 upscaled-photos.zip
-photos/upscaled/
-photos/comparisons/
-photos/originals/
+/photos/upscaled/
+/photos/comparisons/
+/photos/originals/
 photos/.learned-model.json
 screenshot-*.png
 bin/

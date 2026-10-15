@@ -72,10 +72,6 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
         if segments:
             if segments[0] == "scripts" or (len(segments) >= 2 and segments[0] == "tools" and segments[1] == "scripts"):
                 return True
-            if len(segments) >= 2 and segments[0] == "photos" and segments[1] == "originals":
-                return True
-            if len(segments) >= 3 and segments[0] == "tools" and segments[1] == "photos" and segments[2] == "originals":
-                return True
         return False
 
     def _is_same_origin(self):
@@ -130,7 +126,7 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     self._send_json(500, {"ok": False, "error": str(e)})
             else:
-                self._send_json(200, {"always_pair": [], "never_pair": [], "tags": {}})
+                self._send_json(200, {"always_pair": [], "never_pair": [], "tags": {}, "use_original": []})
             return
 
         super().do_GET()
@@ -185,10 +181,14 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     existing = {}
 
+            raw_use_orig = data.get("use_original") if "use_original" in data else existing.get("use_original", [])
+            norm_use_orig = sorted({str(x) for x in (raw_use_orig or []) if x})
+
             overrides = {
                 "always_pair": _norm_pairs(data.get("always_pair")),
                 "never_pair": _norm_pairs(data.get("never_pair")),
                 "tags": data.get("tags") if "tags" in data and data.get("tags") else existing.get("tags", {}),
+                "use_original": norm_use_orig,
             }
             if "dates" in data or "dates" in existing:
                 overrides["dates"] = data.get("dates") or existing.get("dates", {})

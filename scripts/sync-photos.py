@@ -975,7 +975,7 @@ def compute_palette_lab_dist(lab_pal1, lab_pal2):
 def load_overrides():
     """Load manual overrides from photos/overrides.json if present."""
     if not os.path.isfile(OVERRIDES_PATH):
-        return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}}
+        return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}, "use_original": set()}
 
     try:
         with open(OVERRIDES_PATH, "r", encoding="utf-8") as f:
@@ -983,6 +983,7 @@ def load_overrides():
 
         tags_overrides = data.get("tags") or {}
         dates_overrides = data.get("dates") or {}
+        use_original = {str(x) for x in (data.get("use_original") or []) if x}
 
         def _norm_pair(pair):
             if not isinstance(pair, (list, tuple)) or len(pair) != 2:
@@ -1003,12 +1004,19 @@ def load_overrides():
 
         print(
             f"Loaded manual overrides from {OVERRIDES_PATH}: "
-            f"{len(tags_overrides)} tag overrides, {len(dates_overrides)} date overrides, {len(never_pair)} never_pair, {len(always_pair)} always_pair."
+            f"{len(tags_overrides)} tag overrides, {len(dates_overrides)} date overrides, "
+            f"{len(never_pair)} never_pair, {len(always_pair)} always_pair, {len(use_original)} use_original."
         )
-        return {"tags": tags_overrides, "never_pair": never_pair, "always_pair": always_pair, "dates": dates_overrides}
+        return {
+            "tags": tags_overrides,
+            "never_pair": never_pair,
+            "always_pair": always_pair,
+            "dates": dates_overrides,
+            "use_original": use_original,
+        }
     except Exception as e:
         print(f"Warning: Failed to load overrides from {OVERRIDES_PATH}: {e}", file=sys.stderr)
-        return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}}
+        return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}, "use_original": set()}
 
 
 def _fit_logreg(X, y, l2=2.0):
@@ -1565,8 +1573,16 @@ def sync_photos(takeout_dir=None, retag=False):
     # 5. Visual tagging
     tags_cache = run_visual_tagging(unique_filenames, retag=retag)
 
-    # 6. Manual overrides
+    # 6. Manual overrides & originals map
     overrides = load_overrides()
+    originals_map = {}
+    originals_map_path = os.path.join(ROOT_PHOTOS_DIR, "originals-map.json")
+    if os.path.isfile(originals_map_path):
+        try:
+            with open(originals_map_path, "r", encoding="utf-8") as f:
+                originals_map = json.load(f) or {}
+        except Exception as e:
+            print(f"Warning: Could not read {originals_map_path}: {e}", file=sys.stderr)
 
     # 7. Extract date, geo, tags, and local image features
     date_counts = {"Takeout": 0, "EXIF DateTimeOriginal": 0, "EXIF DateTime": 0, "None": 0}
@@ -1660,6 +1676,20 @@ def sync_photos(takeout_dir=None, retag=False):
             "palette": features["palette"],
             "phash": features["phash"],
         }
+        orig_info = originals_map.get(filename)
+        if orig_info and isinstance(orig_info, dict):
+            entry["orig_f"] = orig_info.get("orig_f")
+            entry["orig_w"] = orig_info.get("orig_w")
+            entry["orig_h"] = orig_info.get("orig_h")
+            entry["orig_kb"] = orig_info.get("orig_kb")
+            entry["enh_kb"] = orig_info.get("enh_kb")
+            use_orig_set = overrides.get("use_original") or set()
+            if (
+                filename in use_orig_set
+                or chash in use_orig_set
+                or entry["orig_f"] in use_orig_set
+            ):
+                entry["use_original"] = True
         if p.get("type") == "video":
             entry["type"] = "video"
             if p.get("duration") is not None:

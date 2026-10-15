@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="build" content="26468fed12">
+<meta name="build" content="5b1251bd79">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -379,7 +379,49 @@
     }
     return a;
   }
-  function photoSrc(p) { return typeof p === 'string' ? p : (p && p.src ? p.src : (p && p.f ? ('photos/' + p.f) : '')); }
+  var useOriginalMap = {};
+  function refreshUseOriginalFromLocal() {
+    try {
+      var raw = localStorage.getItem('display_overrides');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.use_original)) {
+          parsed.use_original.forEach(function (fn) {
+            if (fn) useOriginalMap[String(fn)] = true;
+          });
+        }
+      }
+    } catch (e) {}
+  }
+  refreshUseOriginalFromLocal();
+
+  function fetchOverridesConfig() {
+    return fetch('photos/overrides.json', { cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && Array.isArray(data.use_original)) {
+          var nextMap = {};
+          data.use_original.forEach(function (fn) {
+            if (fn) nextMap[String(fn)] = true;
+          });
+          useOriginalMap = nextMap;
+          refreshUseOriginalFromLocal();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function isUsingOriginal(p) {
+    if (!p || typeof p === 'string' || !p.orig_f) return false;
+    return !!(p.use_original || useOriginalMap[p.f] || useOriginalMap[p.orig_f]);
+  }
+
+  function photoSrc(p) {
+    if (typeof p === 'string') return p;
+    if (!p) return '';
+    if (isUsingOriginal(p)) return 'photos/originals/' + p.orig_f;
+    return p.src ? p.src : (p.f ? ('photos/' + p.f) : '');
+  }
 
   function isVideo(p) {
     if (!p) return false;
@@ -1336,6 +1378,10 @@
         photos[j].warmth = item.warmth !== undefined ? item.warmth : photos[j].warmth;
         photos[j].palette = item.palette || photos[j].palette;
         photos[j].phash = item.phash || photos[j].phash;
+        photos[j].orig_f = item.orig_f || photos[j].orig_f || null;
+        photos[j].orig_w = item.orig_w || photos[j].orig_w || null;
+        photos[j].orig_h = item.orig_h || photos[j].orig_h || null;
+        photos[j].use_original = !!item.use_original;
         photos[j].partners = item.partners || [];
         photos[j].alt = item.alt || [];
       }
@@ -1367,7 +1413,8 @@
       }
     }
 
-    // 2. Fetch photos.json with no-cache and merge updates
+    // 2. Fetch overrides.json & photos.json with no-cache and merge updates
+    fetchOverridesConfig();
     fetch('photos/photos.json', { cache: 'no-cache' })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1515,9 +1562,17 @@
 
   function notifySwOfPhotos(list) {
     if (!('serviceWorker' in navigator) || !list || !Array.isArray(list)) return;
-    var fileList = list.map(function (item) {
-      return typeof item === 'string' ? item : item.f;
-    }).filter(Boolean);
+    var fileList = [];
+    list.forEach(function (item) {
+      if (typeof item === 'string') {
+        fileList.push(item);
+      } else if (item && item.f) {
+        fileList.push(item.f);
+        if (item.orig_f) {
+          fileList.push('originals/' + item.orig_f);
+        }
+      }
+    });
 
     var message = {
       type: 'PRUNE_PHOTOS',
@@ -1536,23 +1591,25 @@
   }
 
   function loadManifest() {
-    fetch('photos/photos.json', { cache: 'no-cache' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function (list) {
-        hideStatusNote();
-        retryAttempt = 0;
-        initPhotos(list);
-        notifySwOfPhotos(list);
-      })
-      .catch(function () {
-        showStatusNote();
-        var delay = backoffs[Math.min(retryAttempt, backoffs.length - 1)];
-        retryAttempt++;
-        setTimeout(loadManifest, delay);
-      });
+    fetchOverridesConfig().finally(function () {
+      fetch('photos/photos.json', { cache: 'no-cache' })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (list) {
+          hideStatusNote();
+          retryAttempt = 0;
+          initPhotos(list);
+          notifySwOfPhotos(list);
+        })
+        .catch(function () {
+          showStatusNote();
+          var delay = backoffs[Math.min(retryAttempt, backoffs.length - 1)];
+          retryAttempt++;
+          setTimeout(loadManifest, delay);
+        });
+    });
   }
 
   function initPhotos(list) {
