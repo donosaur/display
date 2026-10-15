@@ -439,7 +439,7 @@
   <div class="brand-group">
     <h1>Photo Review</h1>
     <a href="/" style="font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 3px 8px; border-radius: 4px;">&larr; Slideshow</a>
-    <a href="pairs.html" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Review Pairings &rarr;</a>
+    <a href="/settings" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Review Pairings &rarr;</a>
     <a href="compare.html" style="font-size: 12px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid #fdba74; background: var(--accent-bg); border-radius: 4px; font-weight: 500;">Compare Upscales &rarr;</a>
     <div id="stats" class="stats">Loading...</div>
   </div>
@@ -821,7 +821,7 @@
       partnersTitle.style.justifyContent = 'space-between';
       partnersTitle.style.alignItems = 'center';
       partnersTitle.innerHTML = '<span>Top Partners (' + ((p.partners && p.partners.length) || 0) + ')</span>' +
-        '<a href="pairs.html?photo=' + encodeURIComponent(p.f) + '" style="font-size: 10px; color: var(--accent); text-decoration: none; text-transform: none; font-weight: 500;">Review in Pairs &rarr;</a>';
+        '<a href="/settings?photo=' + encodeURIComponent(p.f) + '" style="font-size: 10px; color: var(--accent); text-decoration: none; text-transform: none; font-weight: 500;">Review in Pairs &rarr;</a>';
       partnersSec.appendChild(partnersTitle);
 
       var partners = p.partners || [];

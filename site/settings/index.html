@@ -803,8 +803,8 @@
 
   <nav class="nav-group">
     <a href="/" class="nav-link">&larr; Slideshow</a>
-    <a href="review.html" class="nav-link">Photo Review</a>
-    <a href="compare.html" class="nav-link">Compare Upscales</a>
+    <a href="/review.html" class="nav-link local-only-link">Photo Review</a>
+    <a href="/compare.html" class="nav-link local-only-link">Compare Upscales</a>
   </nav>
 </header>
 
@@ -985,40 +985,57 @@
       })
       .then(function (serverData) {
         overrides = serverData || { always_pair: [], never_pair: [], tags: {} };
-        // If local data had more recent edits, merge them
         if (localData) {
           mergeLocalOverrides(localData);
         }
         updateSaveStatus('Synced with server');
       })
       .catch(function () {
+        isServerSynced = false;
+        saveBtn.textContent = 'Export Overrides';
+        saveBtn.title = 'Download overrides.json';
+        syncBtn.style.display = 'none';
+        document.querySelectorAll('.local-only-link').forEach(function (el) {
+          el.style.display = 'none';
+        });
         // Fallback to static /photos/overrides.json or local storage
         return fetch('/photos/overrides.json')
           .then(function (res) { return res.ok ? res.json() : null; })
           .catch(function () { return null; })
           .then(function (fileData) {
-            overrides = localData || fileData || { always_pair: [], never_pair: [], tags: {} };
-            updateSaveStatus(localData ? 'Loaded local storage' : 'Loaded overrides.json');
+            if (localData) {
+              overrides = fileData || { always_pair: [], never_pair: [], tags: {} };
+              // Apply local browser edits on top of server overrides.json
+              overrides.always_pair = localData.always_pair || overrides.always_pair || [];
+              overrides.never_pair = localData.never_pair || overrides.never_pair || [];
+              if (fileData) {
+                mergeLocalOverrides(fileData);
+              }
+            } else {
+              overrides = fileData || { always_pair: [], never_pair: [], tags: {} };
+            }
+            updateSaveStatus(localData ? 'Loaded browser storage' : 'Loaded overrides.json');
           });
       });
   }
 
   function mergeLocalOverrides(local) {
     var alwaysMap = {};
+    var neverMap = {};
     (overrides.always_pair || []).forEach(function (p) { alwaysMap[normPairKey(p[0], p[1])] = true; });
+    (overrides.never_pair || []).forEach(function (p) { neverMap[normPairKey(p[0], p[1])] = true; });
+
     (local.always_pair || []).forEach(function (p) {
       var k = normPairKey(p[0], p[1]);
-      if (!alwaysMap[k]) {
+      if (!alwaysMap[k] && !neverMap[k]) {
         overrides.always_pair.push(p);
         alwaysMap[k] = true;
       }
     });
 
-    var neverMap = {};
-    (overrides.never_pair || []).forEach(function (p) { neverMap[normPairKey(p[0], p[1])] = true; });
     (local.never_pair || []).forEach(function (p) {
       var k = normPairKey(p[0], p[1]);
-      if (!neverMap[k]) {
+      if (!neverMap[k] && !alwaysMap[k]) {
         overrides.never_pair.push(p);
         neverMap[k] = true;
       }
@@ -1030,11 +1047,21 @@
     saveStatusEl.className = 'status-pill' + (isSaved ? ' saved' : '');
   }
 
-  function saveOverrides() {
+  function saveOverrides(isManualClick) {
     // 1. Save to localStorage
     try {
       localStorage.setItem('display_overrides', JSON.stringify(overrides));
     } catch (e) {}
+
+    if (!isServerSynced) {
+      updateSaveStatus('Saved in browser (' + overrides.always_pair.length + ' confirmed · ' + overrides.never_pair.length + ' denied)', true);
+      if (isManualClick === true) {
+        exportOverridesFile();
+      } else {
+        showToast('Saved in browser (' + overrides.always_pair.length + ' confirmed · ' + overrides.never_pair.length + ' denied)');
+      }
+      return;
+    }
 
     // 2. Attempt save to server API
     updateSaveStatus('Saving...', false);
@@ -1052,8 +1079,8 @@
       showToast('Saved ' + (overrides.always_pair.length) + ' confirmed & ' + (overrides.never_pair.length) + ' denied overrides.');
     })
     .catch(function () {
-      updateSaveStatus('Saved locally (no API server)', false);
-      showToast('Saved to browser storage. Click Export to download overrides.json.');
+      updateSaveStatus('Saved in browser', true);
+      showToast('Saved to browser storage. Click Export Overrides to download overrides.json.');
     });
   }
 
@@ -1433,14 +1460,14 @@
       var namesDiv = document.createElement('div');
       namesDiv.className = 'pair-names';
       var a1 = document.createElement('a');
-      a1.href = 'review.html#photo-' + pair.p1.f.replace('.', '-');
+      a1.href = isServerSynced ? ('/review.html#photo-' + pair.p1.f.replace('.', '-')) : ('/photos/' + pair.p1.f);
       a1.target = '_blank';
       a1.textContent = pair.p1.f;
       var plus = document.createElement('span');
       plus.className = 'pair-plus';
       plus.textContent = '+';
       var a2 = document.createElement('a');
-      a2.href = 'review.html#photo-' + pair.p2.f.replace('.', '-');
+      a2.href = isServerSynced ? ('/review.html#photo-' + pair.p2.f.replace('.', '-')) : ('/photos/' + pair.p2.f);
       a2.target = '_blank';
       a2.textContent = pair.p2.f;
 
@@ -1578,12 +1605,12 @@
       }
 
       var kioskViewLink = document.createElement('a');
-      kioskViewLink.href = 'index.html?debug=1';
+      kioskViewLink.href = '/?debug=1';
       kioskViewLink.target = '_blank';
       kioskViewLink.style.fontSize = '11px';
       kioskViewLink.style.color = 'var(--text-muted)';
       kioskViewLink.style.textDecoration = 'none';
-      kioskViewLink.textContent = 'Preview in kiosk &rarr;';
+      kioskViewLink.textContent = 'Preview in kiosk \u2192';
 
       actions.appendChild(btnGroup);
       actions.appendChild(kioskViewLink);
@@ -1734,7 +1761,7 @@
     renderUI();
   });
 
-  saveBtn.addEventListener('click', saveOverrides);
+  saveBtn.addEventListener('click', function () { saveOverrides(true); });
   syncBtn.addEventListener('click', syncKioskManifest);
 
   // Add Custom Pair Modal Logic

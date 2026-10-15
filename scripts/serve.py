@@ -20,6 +20,7 @@ SITE_DIR = os.path.join(BASE_DIR, "site")
 SITE_PHOTOS_DIR = os.path.join(SITE_DIR, "photos")
 ROOT_PHOTOS_DIR = os.path.join(BASE_DIR, "photos")
 OVERRIDES_PATH = os.path.join(ROOT_PHOTOS_DIR, "overrides.json")
+SITE_OVERRIDES_PATH = os.path.join(SITE_PHOTOS_DIR, "overrides.json")
 VENV_PYTHON = os.path.join(BASE_DIR, ".venv", "bin", "python3")
 SYNC_SCRIPT = os.path.join(BASE_DIR, "scripts", "sync-photos.py")
 
@@ -32,6 +33,9 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
         clean_path = urllib.parse.urlparse(path).path
         clean_path = posixpath.normpath(urllib.parse.unquote(clean_path))
 
+        if clean_path in ("/settings", "/settings/index.html", "/pairs.html", "/tools/pairs.html", "/tools/settings"):
+            return os.path.join(SITE_DIR, "settings", "index.html")
+
         # Direct tool endpoints or /tools/<tool>.html
         if clean_path.startswith("/tools/"):
             sub = clean_path[len("/tools/"):].lstrip("/")
@@ -40,7 +44,7 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 return os.path.join(BASE_DIR, sub)
 
-        if clean_path in ("/pairs.html", "/review.html", "/compare.html"):
+        if clean_path in ("/review.html", "/compare.html"):
             return os.path.join(BASE_DIR, clean_path.lstrip("/"))
 
         if clean_path.startswith("/photos/"):
@@ -173,21 +177,33 @@ class ReviewRequestHandler(http.server.SimpleHTTPRequestHandler):
                             result.append(p)
                 return sorted(result, key=lambda x: (x[0], x[1]))
 
+            existing = {}
+            if os.path.isfile(OVERRIDES_PATH):
+                try:
+                    with open(OVERRIDES_PATH, "r", encoding="utf-8") as ef:
+                        existing = json.load(ef) or {}
+                except Exception:
+                    existing = {}
+
             overrides = {
                 "always_pair": _norm_pairs(data.get("always_pair")),
                 "never_pair": _norm_pairs(data.get("never_pair")),
-                "tags": data.get("tags") or {},
+                "tags": data.get("tags") if "tags" in data and data.get("tags") else existing.get("tags", {}),
             }
+            if "dates" in data or "dates" in existing:
+                overrides["dates"] = data.get("dates") or existing.get("dates", {})
 
             try:
-                os.makedirs(PHOTOS_DIR, exist_ok=True)
-                tmp_overrides = OVERRIDES_PATH + ".tmp"
-                with open(tmp_overrides, "w", encoding="utf-8") as f:
-                    json.dump(overrides, f, indent=2)
-                    f.write("\n")
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(tmp_overrides, OVERRIDES_PATH)
+                os.makedirs(ROOT_PHOTOS_DIR, exist_ok=True)
+                for target_path in (OVERRIDES_PATH, SITE_OVERRIDES_PATH):
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    tmp_overrides = target_path + ".tmp"
+                    with open(tmp_overrides, "w", encoding="utf-8") as f:
+                        json.dump(overrides, f, indent=2)
+                        f.write("\n")
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp_overrides, target_path)
 
                 self._send_json(200, {
                     "ok": True,
@@ -227,7 +243,7 @@ def run(port=8088, host="127.0.0.1"):
         display_host = "localhost" if host == "127.0.0.1" else (host if host != "0.0.0.0" else "0.0.0.0")
         print(f"Display Kiosk Review Server running at http://{display_host}:{port}/ (bound to {host})")
         print(f"  - Kiosk Slideshow:  http://{display_host}:{port}/")
-        print(f"  - Pairing Review:   http://{display_host}:{port}/tools/pairs.html (or /pairs.html)")
+        print(f"  - Pairing Review:   http://{display_host}:{port}/settings")
         print(f"  - Photo Review:     http://{display_host}:{port}/tools/review.html (or /review.html)")
         print(f"  - Upscale Compare:  http://{display_host}:{port}/tools/compare.html (or /compare.html)")
         try:

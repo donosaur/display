@@ -6,11 +6,11 @@ A self-contained photo slideshow kiosk for the Echo Show 15's Silk browser, depl
 
 - `site/` — deployable kiosk application published to Netlify (`publish = "site"`)
   - `index.html` — single-file kiosk application (responsive pairing layout, color fallback matching, smooth image decoding, stay-awake stack, fullscreen)
+  - `settings/index.html` — pairing review and curation UI deployed at `display.polisti.co/settings` (and served locally at `/settings`)
   - `sw.js` — service worker for offline runtime caching and postMessage photo pruning
-  - `photos/` — slideshow images named by 10-character SHA1 content hash and compact `photos.json` manifest
-- `pairs.html` — standalone review and curation UI to confirm or deny pairings (served via `serve.py` at `/tools/pairs.html` or `/pairs.html`)
-- `review.html` — standalone desktop review tool to inspect photo tags, captions, dates, and partner rankings (`/tools/review.html`)
-- `compare.html` — interactive split slider and side-by-side comparison tool for AI-upscaled photos (`/tools/compare.html`)
+  - `photos/` — slideshow images named by 10-character SHA1 content hash, compact `photos.json` manifest, and mirrored `overrides.json`
+- `review.html` — standalone desktop review tool to inspect photo tags, captions, dates, and partner rankings (`/tools/review.html` or `/review.html`)
+- `compare.html` — interactive split slider and side-by-side comparison tool for AI-upscaled photos (`/tools/compare.html` or `/compare.html`)
 - `photos/` — internal/private photo metadata and archives (not published to production)
   - `.tags-cache.json` — cached Claude API visual tags keyed by content hash (tracked in git)
   - `overrides.json` — manual pairing overrides (`always_pair`, `never_pair`) and tag corrections
@@ -134,25 +134,25 @@ Optional file `photos/overrides.json` to manually adjust tags and pairings witho
 - `always_pair`: forces the pair score to 1.0 and places each photo at the top of the other's partner list.
 - `never_pair`: forces the pair score to 0.0, preventing them from being paired as partners.
 
-### Review tools (`pairs.html` & `review.html`)
+### Review tools (`/settings` & `review.html`)
 
-- **Pairing review (`pairs.html`)**:
-  - Interactive curation UI to inspect algorithm-suggested pairings and apply personal preferences.
+- **Pairing review (`site/settings/index.html` at `/settings`)**:
+  - Interactive curation UI accessible at `display.polisti.co/settings` (and locally at `http://localhost:8088/settings`) to inspect algorithm-suggested pairings and apply personal preferences.
   - Three preview modes: **Kiosk Split** (emulates the portrait 1080×1920 Echo Show 15 layout with 9:16 proportions), **Side by Side**, and **Compact Grid**.
   - Review actions: **✓ Confirm** (`always_pair`, score 1.0, top priority), **✕ Deny** (`never_pair`, score 0.0, excluded), and **↺ Reset** (revert to algorithm suggestion).
   - Rapid keyboard workflow: <kbd>C</kbd>/<kbd>Y</kbd> to confirm, <kbd>D</kbd>/<kbd>N</kbd> to deny, <kbd>R</kbd> to reset, <kbd>J</kbd>/<kbd>K</kbd> or arrows to navigate.
   - Filter by status (All, Unreviewed, Confirmed, Denied) or score threshold ($\ge 0.20$, $\ge 0.35$, $\ge 0.45$, $\ge 0.50$).
   - Search by photo filename, caption, tag, or date.
-  - Deep-link support: `pairs.html?photo=2e55ef7396.jpg`.
-  - Live persistence to `photos/overrides.json` and one-click "Sync Kiosk" to recompute scores.
+  - Deep-link support: `/settings?photo=2e55ef7396.jpg`.
+  - Live persistence to `photos/overrides.json` (and `site/photos/overrides.json`) when running locally via `serve.py`, or browser storage + JSON export on the static site.
   - *Pairing philosophy:* suggested pairs do **not** require manual approval to be displayed. Approved items simply reinforce the algorithm by prioritizing your personal preferences.
 
 - **Photo review (`review.html`)**:
   - Desktop inspection page for photo metadata, tags, and top partner rankings.
-  - Direct links to review individual photo pairings in `pairs.html`.
+  - Direct links to review individual photo pairings in `/settings`.
 
 - **Local review server (`scripts/serve.py`)**:
-  - Run `python3 scripts/serve.py 8088` to serve the kiosk (`site/` at `/`) and review tools (`/tools/` and root `.html` files) locally.
+  - Run `python3 scripts/serve.py 8088` to serve the kiosk (`site/` at `/`), pairing review (`/settings`), and local review tools (`/tools/` and root `.html` files).
   - Binds strictly to `127.0.0.1` by default (opt into LAN via `--lan`).
   - Security lockdown: refuses path segments starting with `.` (403 for `.env`, `.git`), `scripts/`, and `photos/originals/`. Rejects cross-origin POSTs whose `Origin` does not match the server's own `Host`.
   - Atomic write endpoints for `/api/overrides` (writing to a temporary file before atomic `os.replace`) and a 15-minute timeout on `/api/sync`.

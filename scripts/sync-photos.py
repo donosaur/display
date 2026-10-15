@@ -1395,6 +1395,11 @@ def sync_photos(takeout_dir=None, retag=False):
         os.fsync(f.fileno())
     os.replace(tmp_debug, DEBUG_MANIFEST_PATH)
 
+    if os.path.isfile(OVERRIDES_PATH) and os.path.isdir(SITE_PHOTOS_DIR):
+        site_overrides_path = os.path.join(SITE_PHOTOS_DIR, "overrides.json")
+        if os.path.abspath(OVERRIDES_PATH) != os.path.abspath(site_overrides_path):
+            shutil.copyfile(OVERRIDES_PATH, site_overrides_path)
+
     print(f"\nWrote {len(manifest)} photos to compact {MANIFEST_PATH} and debug {DEBUG_MANIFEST_PATH}.")
 
     # 10. Update build version meta tag in index.html
