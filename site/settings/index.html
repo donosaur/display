@@ -1277,6 +1277,15 @@
       reasons.push({ text: 'Shared: ' + sharedSub.join(', '), type: 'positive' });
     }
 
+    // Learned preference signals (matched dimensions / aspect ratio)
+    if (p1.w && p1.h && p2.w && p2.h) {
+      if (p1.w === p2.w && p1.h === p2.h) {
+        reasons.push({ text: 'Matched dimensions (' + p1.w + '×' + p1.h + ') · learned', type: 'positive' });
+      } else if (Math.abs((p1.w / p1.h) - (p2.w / p2.h)) < 0.03) {
+        reasons.push({ text: 'Matched aspect ratio · learned', type: 'positive' });
+      }
+    }
+
     // Luma diff penalty
     if (p1.luma !== undefined && p2.luma !== undefined) {
       var lumaDiff = Math.abs(p1.luma - p2.luma);

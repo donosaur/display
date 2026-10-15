@@ -12,6 +12,7 @@ whose longest edge is under 1080px.
 
 import argparse
 import base64
+import collections
 import concurrent.futures
 from datetime import datetime, timezone
 import hashlib
@@ -65,6 +66,7 @@ MANIFEST_PATH = os.path.join(PHOTOS_DIR, "photos.json")
 DEBUG_MANIFEST_PATH = os.path.join(ROOT_PHOTOS_DIR, "photos.debug.json")
 TAGS_CACHE_PATH = os.path.join(ROOT_PHOTOS_DIR, ".tags-cache.json")
 OVERRIDES_PATH = os.path.join(ROOT_PHOTOS_DIR, "overrides.json")
+LEARNED_MODEL_PATH = os.path.join(ROOT_PHOTOS_DIR, ".learned-model.json")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
 MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
@@ -78,6 +80,7 @@ WEIGHT_SAME_EVENT = 0.10
 WEIGHT_SAME_SCENE = 0.10
 WEIGHT_SUBJECTS_JACCARD = 0.15
 WEIGHT_COLOR_COMPAT = 0.15
+WEIGHT_LEARNED_PREF = 0.25
 
 # Penalty thresholds
 HARD_PENALTY_PHASH_DIST = 10
@@ -350,7 +353,15 @@ def compute_local_features(target):
     elif is_video_file(target):
         img = extract_video_frame(target)
         if img is None:
-            return {"luma": 0.5, "sat": 0.0, "warmth": 0.0, "palette": ["#000000", "#555555", "#aaaaaa"], "phash": phash}
+            return {
+                "luma": 0.5,
+                "sat": 0.0,
+                "warmth": 0.0,
+                "palette": ["#000000", "#555555", "#aaaaaa"],
+                "phash": phash,
+                "_grid": np.full(27, 0.5, dtype=np.float32),
+                "_hist": np.full(24, 3.0 / 24.0, dtype=np.float32),
+            }
     else:
         with Image.open(target) as im:
             img = ImageOps.exif_transpose(im)
@@ -409,12 +420,28 @@ def compute_local_features(target):
         for k in sorted_order
     ]
 
+    # 3x3 spatial RGB grid and 24-bin RGB histogram for override preference learning
+    arr_norm = (pixels / 255.0).astype(np.float32)
+    grid = []
+    for r_idx in range(3):
+        for c_idx in range(3):
+            patch = arr_norm[r_idx * 21:(r_idx + 1) * 21, c_idx * 21:(c_idx + 1) * 21, :]
+            grid.extend(patch.mean(axis=(0, 1)).tolist())
+    grid_arr = np.array(grid, dtype=np.float32)
+
+    hist_r, _ = np.histogram(arr_norm[:, :, 0], bins=8, range=(0.0, 1.0))
+    hist_g, _ = np.histogram(arr_norm[:, :, 1], bins=8, range=(0.0, 1.0))
+    hist_b, _ = np.histogram(arr_norm[:, :, 2], bins=8, range=(0.0, 1.0))
+    hist_arr = np.concatenate([hist_r, hist_g, hist_b]).astype(np.float32) / (64.0 * 64.0)
+
     return {
         "luma": round(luma, 3),
         "sat": round(sat, 3),
         "warmth": round(warmth, 3),
         "palette": palette,
         "phash": phash,
+        "_grid": grid_arr,
+        "_hist": hist_arr,
     }
 
 
@@ -984,8 +1011,238 @@ def load_overrides():
         return {"tags": {}, "never_pair": set(), "always_pair": set(), "dates": {}}
 
 
-def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2, never_pair=None, always_pair=None):
-    """Compute pair score in 0..1 between two photos based on weighted criteria, penalties, and overrides."""
+def _fit_logreg(X, y, l2=2.0):
+    """Fit class-balanced L2-regularized logistic regression via Newton-Raphson."""
+    w = np.zeros(X.shape[1], dtype=np.float64)
+    n_pos = max(1.0, float(np.sum(y == 1.0)))
+    n_neg = max(1.0, float(np.sum(y == 0.0)))
+    sample_w = np.where(y == 1.0, len(y) / (2.0 * n_pos), len(y) / (2.0 * n_neg))
+    reg_diag = np.r_[1e-4, np.ones(X.shape[1] - 1, dtype=np.float64)]
+    for _ in range(25):
+        z = np.clip(X @ w, -20.0, 20.0)
+        p = 1.0 / (1.0 + np.exp(-z))
+        grad = X.T @ (sample_w * (p - y)) + l2 * np.r_[0.0, w[1:]]
+        w_diag = sample_w * np.maximum(p * (1.0 - p), 1e-4)
+        hess = (X.T * w_diag) @ X + l2 * np.diag(reg_diag)
+        step = np.linalg.solve(hess, grad)
+        w -= step
+        if np.linalg.norm(step) < 1e-6:
+            break
+    return w
+
+
+def train_preference_model(manifest, descs, always_pair, never_pair):
+    """Train a pairwise preference model from manual overrides (always_pair / never_pair).
+
+    Returns a dict mapping (f1, f2) -> (p_pref, mixed_lp) if enough overrides exist, else None.
+    """
+    if len(always_pair) < 5 or len(never_pair) < 5:
+        return None
+
+    descs = dict(descs or {})
+    for p in manifest:
+        fn = p["f"]
+        if fn not in descs:
+            fpath = os.path.join(PHOTOS_DIR, fn)
+            if os.path.isfile(fpath):
+                feats = compute_local_features(fpath)
+                grid_arr = feats["_grid"]
+                hist_arr = feats["_hist"]
+            else:
+                grid_arr = np.full(27, 0.5, dtype=np.float32)
+                hist_arr = np.full(24, 3.0 / 24.0, dtype=np.float32)
+            descs[fn] = {
+                "grid": grid_arr,
+                "hist": hist_arr,
+                "ar": float(p["w"]) / float(max(1, p["h"])),
+                "w": p["w"],
+                "h": p["h"],
+                "is_vid": 1.0 if p.get("type") == "video" or is_video_file(fn) else 0.0,
+                "has_date": 1.0 if p.get("date") else 0.0,
+            }
+
+    # Resolve stem or filename keys in overrides to canonical manifest filenames
+    stem_to_fn = {os.path.splitext(p["f"])[0]: p["f"] for p in manifest}
+    fn_set = {p["f"] for p in manifest}
+
+    def _resolve_pair(pair_tuple):
+        a, b = pair_tuple
+        ra = a if a in fn_set else stem_to_fn.get(a)
+        rb = b if b in fn_set else stem_to_fn.get(b)
+        if ra and rb and ra != rb and ra in descs and rb in descs:
+            return (min(ra, rb), max(ra, rb))
+        return None
+
+    pos_pairs = sorted({rp for p in always_pair for rp in [_resolve_pair(p)] if rp})
+    neg_pairs = sorted({rp for p in never_pair for rp in [_resolve_pair(p)] if rp})
+
+    if len(pos_pairs) < 5 or len(neg_pairs) < 5:
+        return None
+
+    # Precompute visual + aspect similarity between all photos for fast graph neighbor features
+    fns = [p["f"] for p in manifest]
+    sim_cache = {}
+    for i, u in enumerate(fns):
+        du = descs[u]
+        for j in range(i + 1, len(fns)):
+            v = fns[j]
+            dv = descs[v]
+            h_sim = float(1.0 - 0.5 * np.abs(du["hist"] - dv["hist"]).sum())
+            g_sim = float(math.exp(-3.0 * np.abs(du["grid"] - dv["grid"]).mean()))
+            ar_sim = math.exp(-6.0 * abs(du["ar"] - dv["ar"]))
+            s_uv = 0.45 * h_sim + 0.25 * g_sim + 0.30 * ar_sim
+            sim_cache[(u, v)] = s_uv
+            sim_cache[(v, u)] = s_uv
+
+    pos_adj = collections.defaultdict(set)
+    neg_adj = collections.defaultdict(set)
+    pos_cnt = collections.Counter()
+    neg_cnt = collections.Counter()
+    for a, b in pos_pairs:
+        pos_adj[a].add(b)
+        pos_adj[b].add(a)
+        pos_cnt[a] += 1
+        pos_cnt[b] += 1
+    for a, b in neg_pairs:
+        neg_adj[a].add(b)
+        neg_adj[b].add(a)
+        neg_cnt[a] += 1
+        neg_cnt[b] += 1
+
+    feature_names = [
+        "bias",
+        "ar_sim",
+        "same_dims",
+        "mixed_lp",
+        "one_dated",
+        "hist_sim",
+        "grid_sim",
+        "has_vid",
+        "sim_to_pos",
+        "sim_to_neg",
+        "photo_prior",
+    ]
+
+    def _feat_vec(a, b):
+        d1, d2 = descs[a], descs[b]
+        ar_diff = abs(d1["ar"] - d2["ar"])
+        ar_sim = math.exp(-8.0 * ar_diff)
+        same_dims = 1.0 if (d1["w"] == d2["w"] and d1["h"] == d2["h"]) else 0.0
+        mixed_lp = 1.0 if ((d1["ar"] > 1.05 and d2["ar"] < 0.95) or (d2["ar"] > 1.05 and d1["ar"] < 0.95)) else 0.0
+        one_dated = 1.0 if (d1["has_date"] != d2["has_date"]) else 0.0
+        hist_sim = float(1.0 - 0.5 * np.abs(d1["hist"] - d2["hist"]).sum())
+        grid_sim = float(math.exp(-3.0 * np.abs(d1["grid"] - d2["grid"]).mean()))
+        has_vid = max(d1["is_vid"], d2["is_vid"])
+
+        sim_pos_1 = max([sim_cache.get((nb, b), 0.0) for nb in pos_adj[a] if nb != b] or [0.0])
+        sim_pos_2 = max([sim_cache.get((nb, a), 0.0) for nb in pos_adj[b] if nb != a] or [0.0])
+        sim_to_pos = max(sim_pos_1, sim_pos_2)
+
+        sim_neg_1 = max([sim_cache.get((nb, b), 0.0) for nb in neg_adj[a] if nb != b] or [0.0])
+        sim_neg_2 = max([sim_cache.get((nb, a), 0.0) for nb in neg_adj[b] if nb != a] or [0.0])
+        sim_to_neg = max(sim_neg_1, sim_neg_2)
+
+        prior_a = (1.0 + pos_cnt[a]) / (2.0 + pos_cnt[a] + 0.5 * neg_cnt[a])
+        prior_b = (1.0 + pos_cnt[b]) / (2.0 + pos_cnt[b] + 0.5 * neg_cnt[b])
+        photo_prior = prior_a * prior_b
+
+        return np.array([
+            1.0,
+            ar_sim,
+            same_dims,
+            mixed_lp,
+            one_dated,
+            hist_sim,
+            grid_sim,
+            has_vid,
+            sim_to_pos,
+            sim_to_neg,
+            photo_prior,
+        ], dtype=np.float64)
+
+    # Build leave-one-edge-out training features
+    X_list, y_list = [], []
+    for label, pairs in [(1.0, pos_pairs), (0.0, neg_pairs)]:
+        for a, b in pairs:
+            if label == 1.0:
+                pos_adj[a].discard(b)
+                pos_adj[b].discard(a)
+                pos_cnt[a] -= 1
+                pos_cnt[b] -= 1
+            else:
+                neg_adj[a].discard(b)
+                neg_adj[b].discard(a)
+                neg_cnt[a] -= 1
+                neg_cnt[b] -= 1
+            X_list.append(_feat_vec(a, b))
+            y_list.append(label)
+            if label == 1.0:
+                pos_adj[a].add(b)
+                pos_adj[b].add(a)
+                pos_cnt[a] += 1
+                pos_cnt[b] += 1
+            else:
+                neg_adj[a].add(b)
+                neg_adj[b].add(a)
+                neg_cnt[a] += 1
+                neg_cnt[b] += 1
+
+    X = np.array(X_list, dtype=np.float64)
+    y = np.array(y_list, dtype=np.float64)
+
+    w = _fit_logreg(X, y, l2=2.0)
+
+    # Evaluate Leave-One-Out Cross-Validation (LOOCV) ROC-AUC
+    loo_preds = np.zeros(len(y), dtype=np.float64)
+    for idx in range(len(y)):
+        mask = np.ones(len(y), dtype=bool)
+        mask[idx] = False
+        w_loo = _fit_logreg(X[mask], y[mask], l2=2.0)
+        z_i = float(np.clip(X[idx] @ w_loo, -20.0, 20.0))
+        loo_preds[idx] = 1.0 / (1.0 + math.exp(-z_i))
+
+    pos_scores = loo_preds[y == 1.0]
+    neg_scores = loo_preds[y == 0.0]
+    auc = float(np.mean([1.0 if p > n else (0.5 if p == n else 0.0) for p in pos_scores for n in neg_scores]))
+
+    print(
+        f"Trained override preference model on {len(pos_pairs)} confirmed + {len(neg_pairs)} denied pairs "
+        f"(LOOCV ROC-AUC: {auc:.3f})."
+    )
+
+    # Save learned model summary to photos/.learned-model.json
+    try:
+        model_meta = {
+            "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "positive_pairs": len(pos_pairs),
+            "negative_pairs": len(neg_pairs),
+            "loocv_roc_auc": round(auc, 4),
+            "weights": {name: round(float(val), 4) for name, val in zip(feature_names, w)},
+        }
+        with open(LEARNED_MODEL_PATH, "w", encoding="utf-8") as mf:
+            json.dump(model_meta, mf, indent=2)
+            mf.write("\n")
+    except Exception:
+        pass
+
+    # Precompute (p_pref, mixed_lp) for all pairs in manifest
+    pair_prefs = {}
+    for i in range(len(fns)):
+        a = fns[i]
+        for j in range(i + 1, len(fns)):
+            b = fns[j]
+            fv = _feat_vec(a, b)
+            z = float(np.clip(fv @ w, -20.0, 20.0))
+            p_pref = 1.0 / (1.0 + math.exp(-z))
+            mixed_lp = bool(fv[3] > 0.5)
+            pair_prefs[(a, b)] = (p_pref, mixed_lp)
+            pair_prefs[(b, a)] = (p_pref, mixed_lp)
+
+    return pair_prefs
+
+
+def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2, never_pair=None, always_pair=None, p_pref=None, mixed_lp=False):
+    """Compute pair score in 0..1 between two photos based on weighted criteria, penalties, overrides, and learned preferences."""
     never_pair = never_pair or set()
     always_pair = always_pair or set()
 
@@ -1084,11 +1341,21 @@ def score_pair(p1, p2, d1, d2, lab_pal1, lab_pal2, never_pair=None, always_pair=
     if luma_diff > SOFT_PENALTY_LUMA_DIFF:
         score *= SOFT_PENALTY_FACTOR
 
+    # 5. Learned user preference adjustment from manual overrides
+    if p_pref is not None:
+        if p_pref >= 0.5:
+            score += WEIGHT_LEARNED_PREF * (p_pref - 0.5) * 2.0
+        else:
+            score *= (0.4 + 1.2 * p_pref)
+        if mixed_lp:
+            score *= 0.5
+        score = min(0.99, score)
+
     return max(0.0, min(1.0, score))
 
 
-def score_color_alone(p1, p2, lab_pal1, lab_pal2, never_pair=None):
-    """Compute color compatibility score in 0..1 alone between two photos, with hard penalties applied and no threshold."""
+def score_color_alone(p1, p2, lab_pal1, lab_pal2, never_pair=None, p_pref=None, mixed_lp=False):
+    """Compute color compatibility score in 0..1 alone between two photos, modulated by learned preference if available."""
     never_pair = never_pair or set()
 
     p1_f, p2_f = p1["f"], p2["f"]
@@ -1138,16 +1405,21 @@ def score_color_alone(p1, p2, lab_pal1, lab_pal2, never_pair=None):
     if luma_diff > SOFT_PENALTY_LUMA_DIFF:
         color_compat *= SOFT_PENALTY_FACTOR
 
+    if p_pref is not None:
+        color_compat *= p_pref * (0.35 if mixed_lp else 1.0)
+
     return max(0.0, min(1.0, color_compat))
 
 
-def compute_all_pair_scores(manifest, overrides=None):
-    """Compute pairwise scores for all photos, apply overrides, attach top 10 partners and top 5 color alts."""
+def compute_all_pair_scores(manifest, overrides=None, descs=None):
+    """Compute pairwise scores for all photos, apply overrides and learned preference model, attach top 10 partners and top 5 alts."""
     overrides = overrides or {}
     never_pair = overrides.get("never_pair", set())
     always_pair = overrides.get("always_pair", set())
 
     n = len(manifest)
+    pair_prefs = train_preference_model(manifest, descs, always_pair, never_pair)
+
     print(f"Scoring all {n * (n - 1) // 2} photo pairs...")
 
     # Pre-parse dates and Lab palettes
@@ -1168,12 +1440,24 @@ def compute_all_pair_scores(manifest, overrides=None):
             d2 = parsed_dates[j]
             lab2 = lab_palettes[j]
 
-            s = score_pair(p1, p2, d1, d2, lab1, lab2, never_pair=never_pair, always_pair=always_pair)
+            p_pref, mixed_lp = (None, False)
+            if pair_prefs is not None:
+                p_pref, mixed_lp = pair_prefs.get((p1["f"], p2["f"]), (None, False))
+
+            s = score_pair(
+                p1, p2, d1, d2, lab1, lab2,
+                never_pair=never_pair, always_pair=always_pair,
+                p_pref=p_pref, mixed_lp=mixed_lp
+            )
             if s >= MIN_PARTNER_SCORE:
                 partners_by_photo[i].append((p2["f"], round(s, 3)))
                 partners_by_photo[j].append((p1["f"], round(s, 3)))
 
-            c = score_color_alone(p1, p2, lab1, lab2, never_pair=never_pair)
+            c = score_color_alone(
+                p1, p2, lab1, lab2,
+                never_pair=never_pair,
+                p_pref=p_pref, mixed_lp=mixed_lp
+            )
             if c > 0:
                 alt_by_photo[i].append((p2["f"], round(c, 2)))
                 alt_by_photo[j].append((p1["f"], round(c, 2)))
@@ -1290,6 +1574,7 @@ def sync_photos(takeout_dir=None, retag=False):
 
     print(f"Computing local image features (luma, sat, warmth, palette, phash) for {len(local_photos)} photos...")
     manifest = []
+    learning_descs = {}
     for p in local_photos:
         filename = p["f"]
         filepath = os.path.join(PHOTOS_DIR, filename)
@@ -1351,6 +1636,15 @@ def sync_photos(takeout_dir=None, retag=False):
                     tags_obj[ok] = ov
 
         features = compute_local_features(filepath)
+        learning_descs[filename] = {
+            "grid": features.get("_grid", np.full(27, 0.5, dtype=np.float32)),
+            "hist": features.get("_hist", np.full(24, 3.0 / 24.0, dtype=np.float32)),
+            "ar": float(p["w"]) / float(max(1, p["h"])),
+            "w": p["w"],
+            "h": p["h"],
+            "is_vid": 1.0 if p.get("type") == "video" else 0.0,
+            "has_date": 1.0 if final_date else 0.0,
+        }
 
         entry = {
             "f": filename,
@@ -1375,8 +1669,8 @@ def sync_photos(takeout_dir=None, retag=False):
     # Sort manifest deterministically by filename
     manifest.sort(key=lambda item: item["f"])
 
-    # 8. Compute pair compatibility scores
-    compute_all_pair_scores(manifest, overrides=overrides)
+    # 8. Compute pair compatibility scores (including override-learned preference model)
+    compute_all_pair_scores(manifest, overrides=overrides, descs=learning_descs)
 
     # 9. Write compact photos.json (no indent) and formatted photos.debug.json atomically
     tmp_manifest = MANIFEST_PATH + ".tmp"

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="build" content="5458dd7de9">
+<meta name="build" content="188db42161">
 <title>Display</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -776,6 +776,34 @@
 
     var pairedSlides = [];
 
+    // Pass 0: Honor manual always_pair overrides (score >= 1.0) across all available photos
+    if (LAYOUT !== 'single') {
+      var allAvail = [].concat(pairable, nonPairable);
+      if (SHUFFLE) shuffle(allAvail);
+      for (var cIdx = 0; cIdx < allAvail.length; cIdx++) {
+        var cp1 = allAvail[cIdx];
+        if (used[cp1.f]) continue;
+        var cPartners = cp1.partners || [];
+        var confirmedCandidates = [];
+        for (var ck = 0; ck < cPartners.length; ck++) {
+          var cFn = cPartners[ck][0];
+          var cSc = cPartners[ck][1];
+          if (cSc >= 1.0 && !used[cFn] && !roundFailedPhotos[cFn] && photoMap[cFn] && cFn !== cp1.f) {
+            confirmedCandidates.push(cPartners[ck]);
+          }
+        }
+        if (confirmedCandidates.length > 0) {
+          var chosenConfirmed = pickWeightedPartner(confirmedCandidates);
+          var cp2 = photoMap[chosenConfirmed[0]];
+          if (cp2) {
+            used[cp1.f] = true;
+            used[cp2.f] = true;
+            pairedSlides.push({ type: 'pair', pairType: 'partner', photos: [cp1, cp2], score: chosenConfirmed[1] });
+          }
+        }
+      }
+    }
+
     // Pass 1: For each unpaired photo, pick from top 3 unused pairable partners (score-weighted)
     for (var i = 0; i < pairable.length; i++) {
       var p1 = pairable[i];
@@ -882,7 +910,7 @@
       leftoverSlides.push({ type: 'leftover', photos: [last] });
     }
 
-    var singleSlides = nonPairable.map(function (p) {
+    var singleSlides = nonPairable.filter(function (p) { return !used[p.f]; }).map(function (p) {
       return { type: 'single', photos: [p] };
     });
 

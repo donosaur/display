@@ -39,19 +39,20 @@ To prevent mismatched photo orientations from being heavily cropped, the slidesh
 - Images with half-cell crop loss at least 0.15 lower than full-viewport loss are marked pairable. In portrait (va < 1), this pairs landscape photos; in landscape, it pairs portrait photos. Near-square and well-fitting images stay single.
 - In `buildSlideQueue()`:
   1. The pairable set is shuffled at the start of each round (unless `?shuffle=0`, which enforces deterministic order).
-  2. For each unpaired photo, candidates are selected from its precomputed `partners` list that are unused this round, pairable in the current viewport, and have score >= 0.20.
-  3. A partner is chosen at random among the top 3 qualifying candidates, weighted by score. This ensures pairs vary naturally across rounds while prioritizing the best matches.
-  4. Leftovers pass: remaining unpaired photos attempt to pair with any other unused pairable photo where compatibility score > 0.
-  5. Color-compatibility fallback pass: photos that still have no date or semantic partner pair by visual color harmony alone (`alt` partners in manifest, picking weighted among top 3). This reduced random sequential pairings from 56.3% (40/71) down to ~15–18% (11–13/71).
-  6. Final fallback pass: any remaining unused pairable photos are paired together sequentially (tagged as `random` in debug overlay, score 0).
-  7. If an odd pairable photo remains, it renders uncropped (`contain`) over a blurred, darkened, scaled backdrop of itself (`filter: blur(40px) brightness(0.5); transform: scale(1.2)`).
-  8. Event spreading: the queue reorders adjacent slides where possible to avoid showing two consecutive slides from the same calendar date.
+  2. **Confirmed override pass (Pass 0)**: Any photo with an unused manual `always_pair` (`score >= 1.0`) partner is paired first, even if its aspect ratio is normally shown single in the current viewport. Unpaired non-pairable photos remain full-bleed single slides.
+  3. **Partner pass (Pass 1)**: For each unpaired pairable photo, candidates are selected from its precomputed `partners` list that are unused this round, pairable in the current viewport, and have score >= 0.20.
+  4. A partner is chosen at random among the top 3 qualifying candidates, weighted by score. This ensures pairs vary naturally across rounds while prioritizing the best matches.
+  5. **Leftovers pass (Pass 2)**: Remaining unpaired photos attempt to pair with any other unused pairable photo where compatibility score > 0.
+  6. **Color-compatibility fallback pass (Pass 2b)**: Photos that still have no date or semantic partner pair by visual color harmony and learned preference (`alt` partners in manifest, picking weighted among top 3).
+  7. **Final fallback pass (Pass 3)**: Any remaining unused pairable photos are paired together sequentially (tagged as `random` in debug overlay, score 0).
+  8. If an odd pairable photo remains, it renders uncropped (`contain`) over a blurred, darkened, scaled backdrop of itself (`filter: blur(40px) brightness(0.5); transform: scale(1.2)`).
+  9. Event spreading: the queue reorders adjacent slides where possible to avoid showing two consecutive slides from the same calendar date.
 - Paired slides split the screen with a 3px black gap (stacked top/bottom in portrait, side-by-side in landscape).
 - **Round preservation**: the kiosk tracks photos shown this round (`shownPhotosThisRound`). When the queue is rebuilt mid-round due to an orientation change (`handleResize()`) or a single failed image load (`show()`), it preserves the current slide and rebuilds remaining slides exclusively from photos not yet shown, preventing repeats and skips. A fresh shuffle occurs strictly at the round wrap.
 
-### Pair scoring model & weights
+### Pair scoring model & override preference learning
 
-Pair compatibility scores (0..1) are computed offline during sync as a weighted sum. Constants at the top of `scripts/sync-photos.py` allow tuning the balance:
+Pair compatibility scores (0..1) are computed offline during sync as a weighted sum combined with a supervised preference model trained on `photos/overrides.json`. Constants at the top of `scripts/sync-photos.py` allow tuning the balance:
 
 | Factor | Weight / Bonus | Condition |
 |---|---|---|
@@ -63,14 +64,26 @@ Pair compatibility scores (0..1) are computed offline during sync as a weighted 
 | Same scene | `+0.10` | Matching `scene` (excluding `other`) |
 | Shared subjects | `× 0.15` | Jaccard similarity of tagged subjects |
 | Color compatibility | `× 0.15` | `1 - normalized_blend(\|luma diff\|, \|sat diff\|, \|warmth diff\|, Lab palette dist)` |
+| Learned user preference | `±0.25` | Class-balanced L2 logistic regression trained on `always_pair` vs `never_pair` overrides |
+
+**Override preference learning (`train_preference_model`):**
+When `photos/overrides.json` contains at least 5 confirmed (`always_pair`) and 5 denied (`never_pair`) pairs, `scripts/sync-photos.py` automatically trains a class-balanced L2-regularized logistic regression classifier across 11 visual, structural, and graph-affinity features (achieving ~0.81 Leave-One-Out Cross-Validation ROC-AUC on 26 confirmed and 331 denied pairs):
+- **Aspect & resolution harmony**: aspect ratio similarity (`exp(-8 * |ar1 - ar2|)`), exact dimension match (`w1 == w2 and h1 == h2`), and landscape+portrait mismatch (`mixed_lp`).
+- **Spatial & color distribution**: 24-bin RGB histogram intersection (`hist_sim`) and 3×3 spatial patch RGB similarity (`grid_sim`) extracted from 64×64 thumbnails.
+- **Metadata & media alignment**: date presence mismatch (`one_dated`, penalizing dated+undated mixes) and video indicator (`has_vid`).
+- **Collaborative neighbor affinity & Empirical Bayes prior**: leave-one-edge-out similarity to a photo's confirmed partners (`sim_to_pos`), similarity to denied partners (`sim_to_neg`), and smoothed per-photo pairability prior (`photo_prior`).
+
+High learned preference ($p_{\text{pref}} \ge 0.5$) boosts compatible pairs by up to `+0.25` (promoting strong undated visual companions above the `0.20` partner threshold), while low learned preference ($p_{\text{pref}} < 0.5$) and landscape+portrait mismatches scale scores down and refine `alt` fallback rankings.
 
 **Penalties:**
 - **Hard penalties (score = 0, never paired):**
+  - Manual `never_pair` override.
   - Perceptual hash Hamming distance $\le 10$ (suppresses burst shots and near-duplicates).
   - One photo is black & white and the other is color.
   - Either photo is tagged with subject `text-screenshot`.
-- **Soft penalty:**
-  - Luminance difference $|luma_1 - luma_2| > 0.45$ multiplies final score by `0.5` (prevents glaring dark/bright clashes).
+- **Soft penalties:**
+  - Luminance difference $|luma_1 - luma_2| > 0.45$ multiplies score by `0.5` (prevents glaring dark/bright clashes).
+  - Landscape + portrait orientation mismatch (`mixed_lp`) multiplies score by `0.5`.
 
 Each photo stores its top 10 partners with score $\ge 0.20$ as `partners: [["<filename>", 0.73], ...]`.
 
